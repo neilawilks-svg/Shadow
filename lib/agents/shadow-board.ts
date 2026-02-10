@@ -20,7 +20,8 @@ interface RunInput {
 }
 
 interface PersonaStructuredOutput {
-  comment: string;
+  comment?: string;
+  comments?: string[];
   viewpoint: string;
   thinkingSteps: string[];
   risks: string[];
@@ -28,6 +29,9 @@ interface PersonaStructuredOutput {
   challengeQuestions: string[];
   confidence: number;
 }
+
+const MIN_COMMENTS_PER_PERSONA = 3;
+const MAX_COMMENTS_PER_PERSONA = 5;
 
 export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardRun> {
   const runId = `shadow-${randomUUID()}`;
@@ -51,10 +55,12 @@ export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardR
 
     const outputs = await Promise.all(
       personas.map(async (persona): Promise<PersonaDebateOutput> => {
+        const fallbackComments = buildFallbackComments(persona.name, persona.lens, input.topics);
         const fallback: PersonaDebateOutput = {
           personaId: persona.id,
           personaName: persona.name,
-          comment: `${persona.name}: we should pressure-test assumptions before committing capital.`,
+          comment: fallbackComments[0] ?? `${persona.name}: we should pressure-test assumptions before committing capital.`,
+          comments: fallbackComments,
           viewpoint: `${persona.name} emphasizes ${persona.lens}.`,
           thinkingSteps: [
             "Clarify the core assumption behind this decision.",
@@ -77,6 +83,8 @@ export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardR
             persona.promptTemplate,
             "Return concise board-style critique as valid JSON.",
             "thinkingSteps must be high-level reasoning summaries suitable for UI thought bubbles (never hidden chain-of-thought).",
+            "comments must contain 3-5 short conversational turns as if speaking across rounds in a board discussion.",
+            "Each comment should be under 180 characters and reflect a distinct turn.",
             "Keep all arrays to max 3 items.",
           ].join("\n"),
           model: config.modelShadowBoard,
@@ -89,24 +97,29 @@ export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardR
               `Agenda: ${input.agenda}`,
               `Topics: ${input.topics.join("; ")}`,
               "Return exactly this JSON shape:",
-              '{"comment":"string","viewpoint":"string","thinkingSteps":["string"],"risks":["string"],"recommendations":["string"],"challengeQuestions":["string"],"confidence":0.0}',
+              '{"comment":"string optional","comments":["string (3-5 turns)"],"viewpoint":"string","thinkingSteps":["string"],"risks":["string"],"recommendations":["string"],"challengeQuestions":["string"],"confidence":0.0}',
             ].join("\n"),
           );
 
           const text = String(result.finalOutput ?? "").trim();
           const parsed = parsePersonaOutput(text);
           if (!parsed) {
+            const plainTextComments = extractPlainTextComments(text);
+            const comments = normalizeComments(plainTextComments, plainTextComments[0], fallback.comments);
             return {
               ...fallback,
               viewpoint: text.slice(0, 700) || fallback.viewpoint,
-              comment: text.split("\n")[0]?.slice(0, 180) || fallback.comment,
+              comment: comments[0] ?? fallback.comment,
+              comments,
             };
           }
 
+          const comments = normalizeComments(parsed.comments, parsed.comment, fallback.comments);
           return {
             personaId: persona.id,
             personaName: persona.name,
-            comment: parsed.comment || fallback.comment,
+            comment: comments[0] ?? fallback.comment,
+            comments,
             viewpoint: parsed.viewpoint || fallback.viewpoint,
             thinkingSteps: normalizeArray(parsed.thinkingSteps, fallback.thinkingSteps),
             risks: normalizeArray(parsed.risks, fallback.risks),
@@ -214,6 +227,73 @@ function parsePersonaOutput(text: string): PersonaStructuredOutput | null {
   } catch {
     return null;
   }
+}
+
+function buildFallbackComments(personaName: string, lens: string, topics: string[]): string[] {
+  const topicA = topics[0]?.trim() || "the strategic priority";
+  const topicB = topics[1]?.trim() || "execution readiness";
+
+  return [
+    `${personaName}: Let's define the success metric for ${topicA} before we scale investment.`,
+    `${personaName}: I support a time-boxed pilot tied to ${topicB} so we can adjust quickly.`,
+    `${personaName}: Assign one accountable executive owner with clear escalation checkpoints.`,
+    `${personaName}: Through the ${lens.toLowerCase()} lens, what tradeoffs are we underestimating?`,
+  ];
+}
+
+function extractPlainTextComments(text: string): string[] {
+  return text
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^[-*\d.)\s]+/, "").trim())
+    .filter(Boolean)
+    .slice(0, MAX_COMMENTS_PER_PERSONA);
+}
+
+function normalizeComments(
+  input: unknown,
+  singularComment: unknown,
+  fallback: string[],
+): string[] {
+  const normalized = new Set<string>();
+
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (typeof item !== "string") {
+        continue;
+      }
+      const cleaned = item.trim();
+      if (cleaned.length === 0) {
+        continue;
+      }
+      normalized.add(cleaned.slice(0, 180));
+      if (normalized.size >= MAX_COMMENTS_PER_PERSONA) {
+        break;
+      }
+    }
+  }
+
+  if (normalized.size === 0 && typeof singularComment === "string") {
+    const cleaned = singularComment.trim();
+    if (cleaned.length > 0) {
+      normalized.add(cleaned.slice(0, 180));
+    }
+  }
+
+  for (const fallbackComment of fallback) {
+    if (normalized.size >= MIN_COMMENTS_PER_PERSONA) {
+      break;
+    }
+    const cleaned = fallbackComment.trim();
+    if (cleaned.length > 0) {
+      normalized.add(cleaned.slice(0, 180));
+    }
+  }
+
+  while (normalized.size < MIN_COMMENTS_PER_PERSONA) {
+    normalized.add("Let's define owners, metrics, and checkpoints before committing full rollout.");
+  }
+
+  return Array.from(normalized).slice(0, MAX_COMMENTS_PER_PERSONA);
 }
 
 function normalizeArray(input: unknown, fallback: string[]): string[] {

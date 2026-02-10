@@ -26,6 +26,7 @@ interface RunResult {
     personaId: string;
     personaName: string;
     comment: string;
+    comments: string[];
     viewpoint: string;
     thinkingSteps: string[];
     confidence: number;
@@ -69,6 +70,14 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         id: persona.id,
         name: persona.name,
         comment: output?.comment ?? `${persona.name}: awaiting scenario run.`,
+        comments:
+          output?.comments && output.comments.length >= 3
+            ? output.comments.slice(0, 5)
+            : [
+                `${persona.name}: I want sharper clarity on success metrics before we commit.`,
+                `${persona.name}: Let's pressure-test the downside with a staged checkpoint.`,
+                `${persona.name}: Name one accountable owner and timeline for execution.`,
+              ],
         thinkingSteps:
           output?.thinkingSteps ?? [
             "Watch for strategic contradiction.",

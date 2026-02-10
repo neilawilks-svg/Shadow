@@ -96,6 +96,7 @@ export interface PersonaDebateOutput {
   personaId: string;
   personaName: string;
   comment: string;
+  comments: string[];
   viewpoint: string;
   thinkingSteps: string[];
   risks: string[];
