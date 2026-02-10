@@ -48,3 +48,6 @@ next-env.d.ts
 
 # local worktree helpers
 /worktrees/
+
+# generated demo bootstrap report
+data/demo-ready-shadow-board-report.md

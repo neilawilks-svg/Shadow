@@ -37,6 +37,18 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## First-Run Checklist
+1. Add `OPENAI_API_KEY` in `.env`.
+2. Install dependencies: `npm install`.
+3. Bootstrap demo state and pre-run sample shadow board:
+```bash
+npm run demo:ready
+```
+4. Start app: `npm run dev`.
+5. Open `/demo` and run **Demo Health** checks.
+6. Open `/meeting`, select system audio input (`BlackHole 2ch` or `Microsoft Teams Audio`), accept consent, and start capture.
+7. Open `/shadow-board` and pick an industry preset to run a client narrative.
+
 ## Routes
 - `/meeting`
 - `/personas`
@@ -55,6 +67,7 @@ Open `http://localhost:3000`.
 - `POST /api/shadow-board/runs`
 - `GET /api/shadow-board/runs/:runId`
 - `GET /api/shadow-board/runs/:runId/report`
+- `GET /api/demo/health`
 
 ## Governance Defaults
 - Consent required before capture.

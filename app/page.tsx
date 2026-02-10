@@ -58,6 +58,17 @@ export default function HomePage() {
         </div>
       </SectionCard>
 
+      <SectionCard title="First-Run Checklist" subtitle="Fast path to a presentation-ready session">
+        <ol className="list-decimal space-y-2 pl-5 text-sm text-[color:var(--ink-2)]">
+          <li>Add your OpenAI API key in `.env`.</li>
+          <li>Run `npm install`.</li>
+          <li>Run `npm run demo:ready` to reset, seed, and pre-run a sample shadow board packet.</li>
+          <li>Start app with `npm run dev` and open `/demo` to run health checks.</li>
+          <li>Open `/meeting`, select `BlackHole 2ch` or `Microsoft Teams Audio`, then accept consent and start capture.</li>
+          <li>Open `/shadow-board` and use an industry preset for your first scenario.</li>
+        </ol>
+      </SectionCard>
+
       <SectionCard title="Architecture Highlights" subtitle="Implementation choices aligned to the decision-complete plan">
         <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--ink-2)]">
           <li>TypeScript full-stack Next.js app with App Router APIs.</li>
@@ -65,6 +76,7 @@ export default function HomePage() {
           <li>Model-only intervention judgment with cooldown and SSE push updates.</li>
           <li>Eight fixed personas plus guided interview synthesis for custom personas.</li>
           <li>Shadow board simulation output with consensus and dissent summaries.</li>
+          <li>8-bit virtual board roam with persona thought bubbles and reasoning summaries.</li>
         </ul>
       </SectionCard>
     </div>
