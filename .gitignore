@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# runtime local data files
+/data/*.json
+!/data/sample-agenda-packet.md
+!/data/sample-interview-source.md
+
+# local worktree helpers
+/worktrees/

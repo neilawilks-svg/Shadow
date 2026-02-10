@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Morgan Virtual Board Member Demo
 
-## Getting Started
+Local-first OpenAI-powered demo for:
+- Live board meeting listening + transcript timeline
+- Morgan raise-hand insight queue
+- Persona studio with guided interview synthesis
+- 8-agent shadow board simulation and report generation
 
-First, run the development server:
+## Tech Stack
+- Next.js App Router + TypeScript
+- Tailwind CSS
+- OpenAI API + Agents SDK
+- Local JSON persistence under `/data`
 
+## Prerequisites
+- Node.js 22+
+- npm
+- OpenAI API key in `.env`
+
+## Environment
+`.env` and `.env.example` include:
+- `OPENAI_API_KEY`
+- `MODEL_TRANSCRIBE`
+- `MODEL_MONITOR`
+- `MODEL_PERSONA_SYNTHESIS`
+- `MODEL_SHADOW_BOARD`
+- `PERSIST_TRANSCRIPTS`
+- `PERSIST_RAW_AUDIO`
+- `ENABLE_REDACTION`
+
+## Run
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Routes
+- `/meeting`
+- `/personas`
+- `/shadow-board`
+- `/demo`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Key APIs
+- `POST /api/realtime/client-secret`
+- `POST /api/meeting/sessions`
+- `POST /api/meeting/transcript-segments`
+- `GET /api/meeting/events/:sessionId`
+- `POST /api/meeting/invite-morgan`
+- `GET/POST /api/personas`
+- `POST /api/personas/interview/start`
+- `POST /api/personas/interview/:id/turn`
+- `POST /api/shadow-board/runs`
+- `GET /api/shadow-board/runs/:runId`
+- `GET /api/shadow-board/runs/:runId/report`
 
-## Learn More
+## Governance Defaults
+- Consent required before capture.
+- Redaction enabled by default.
+- Raw audio persistence disabled.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Docs
+- `docs/requirements/morgan-phase-brief.md`
+- `docs/architecture.md`
+- `docs/api.md`
+- `docs/runbooks/demo-script.md`
