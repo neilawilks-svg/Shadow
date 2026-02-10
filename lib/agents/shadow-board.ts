@@ -19,6 +19,16 @@ interface RunInput {
   personaIds: string[];
 }
 
+interface PersonaStructuredOutput {
+  comment: string;
+  viewpoint: string;
+  thinkingSteps: string[];
+  risks: string[];
+  recommendations: string[];
+  challengeQuestions: string[];
+  confidence: number;
+}
+
 export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardRun> {
   const runId = `shadow-${randomUUID()}`;
   const runRecord: ShadowBoardRun = {
@@ -44,7 +54,13 @@ export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardR
         const fallback: PersonaDebateOutput = {
           personaId: persona.id,
           personaName: persona.name,
+          comment: `${persona.name}: we should pressure-test assumptions before committing capital.`,
           viewpoint: `${persona.name} emphasizes ${persona.lens}.`,
+          thinkingSteps: [
+            "Clarify the core assumption behind this decision.",
+            "Test downside exposure with a staged rollout.",
+            "Define ownership and a measurable checkpoint.",
+          ],
           risks: ["Potential execution risk due to unclear ownership."],
           recommendations: ["Define decision rights and measurable checkpoints."],
           challengeQuestions: ["What assumptions are we least confident about?"],
@@ -57,20 +73,49 @@ export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardR
 
         const agent = new Agent({
           name: `${persona.name} Agent`,
-          instructions: `${persona.promptTemplate}\nProvide concise board-style critique in JSON-compatible prose.`,
+          instructions: [
+            persona.promptTemplate,
+            "Return concise board-style critique as valid JSON.",
+            "thinkingSteps must be high-level reasoning summaries suitable for UI thought bubbles (never hidden chain-of-thought).",
+            "Keep all arrays to max 3 items.",
+          ].join("\n"),
           model: config.modelShadowBoard,
         });
 
         try {
           const result = await run(
             agent,
-            `Agenda: ${input.agenda}\nTopics: ${input.topics.join("; ")}\nReturn: viewpoint, risks (max 3), recommendations (max 3), challengeQuestions (max 3), confidence (0-1).`,
+            [
+              `Agenda: ${input.agenda}`,
+              `Topics: ${input.topics.join("; ")}`,
+              "Return exactly this JSON shape:",
+              '{"comment":"string","viewpoint":"string","thinkingSteps":["string"],"risks":["string"],"recommendations":["string"],"challengeQuestions":["string"],"confidence":0.0}',
+            ].join("\n"),
           );
 
-          const text = String(result.finalOutput ?? "");
+          const text = String(result.finalOutput ?? "").trim();
+          const parsed = parsePersonaOutput(text);
+          if (!parsed) {
+            return {
+              ...fallback,
+              viewpoint: text.slice(0, 700) || fallback.viewpoint,
+              comment: text.split("\n")[0]?.slice(0, 180) || fallback.comment,
+            };
+          }
+
           return {
-            ...fallback,
-            viewpoint: text.slice(0, 700) || fallback.viewpoint,
+            personaId: persona.id,
+            personaName: persona.name,
+            comment: parsed.comment || fallback.comment,
+            viewpoint: parsed.viewpoint || fallback.viewpoint,
+            thinkingSteps: normalizeArray(parsed.thinkingSteps, fallback.thinkingSteps),
+            risks: normalizeArray(parsed.risks, fallback.risks),
+            recommendations: normalizeArray(parsed.recommendations, fallback.recommendations),
+            challengeQuestions: normalizeArray(parsed.challengeQuestions, fallback.challengeQuestions),
+            confidence:
+              typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
+                ? Math.max(0, Math.min(1, parsed.confidence))
+                : fallback.confidence,
           };
         } catch {
           return fallback;
@@ -154,4 +199,32 @@ function buildDissentSummary(outputs: PersonaDebateOutput[]): string {
   }
 
   return `Dissent: ${optimistic.personaName} favored faster experimentation while ${cautious.personaName} preferred stronger downside controls before full rollout.`;
+}
+
+function parsePersonaOutput(text: string): PersonaStructuredOutput | null {
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first === -1 || last === -1 || last <= first) {
+    return null;
+  }
+
+  const candidate = text.slice(first, last + 1);
+  try {
+    return JSON.parse(candidate) as PersonaStructuredOutput;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeArray(input: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(input)) {
+    return fallback;
+  }
+
+  const cleaned = input
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  return cleaned.length > 0 ? cleaned : fallback;
 }

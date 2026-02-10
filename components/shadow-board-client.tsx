@@ -5,11 +5,14 @@ import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/badge";
 import { CostPanel } from "@/components/cost-panel";
 import { SectionCard } from "@/components/section-card";
+import { ShadowBoard8BitRoam } from "@/components/shadow-board-8bit";
+import { INDUSTRY_PRESETS } from "@/lib/industry-presets";
 
 interface Persona {
   id: string;
   name: string;
   fixed: boolean;
+  lens: string;
 }
 
 interface RunResult {
@@ -20,8 +23,11 @@ interface RunResult {
   consensusSummary: string;
   dissentSummary: string;
   outputs: Array<{
+    personaId: string;
     personaName: string;
+    comment: string;
     viewpoint: string;
+    thinkingSteps: string[];
     confidence: number;
   }>;
   recommendations: Array<{
@@ -54,6 +60,25 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     [topics],
   );
 
+  const roamPersonas = useMemo(() => {
+    const outputByName = new Map(runResult?.outputs.map((output) => [output.personaName, output]) ?? []);
+
+    return personas.map((persona) => {
+      const output = outputByName.get(persona.name);
+      return {
+        id: persona.id,
+        name: persona.name,
+        comment: output?.comment ?? `${persona.name}: awaiting scenario run.`,
+        thinkingSteps:
+          output?.thinkingSteps ?? [
+            "Watch for strategic contradiction.",
+            "Pressure-test downside and upside.",
+            "Recommend concrete next checkpoint.",
+          ],
+      };
+    });
+  }, [personas, runResult?.outputs]);
+
   const togglePersona = useCallback((id: string) => {
     setSelectedPersonaIds((current) => {
       if (current.includes(id)) {
@@ -61,6 +86,16 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       }
       return [...current, id];
     });
+  }, []);
+
+  const applyPreset = useCallback((presetId: string) => {
+    const preset = INDUSTRY_PRESETS.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
+    setAgenda(preset.agenda);
+    setTopics(preset.topics.join(", "));
   }, []);
 
   const runShadowBoard = useCallback(async () => {
@@ -105,6 +140,24 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           <SectionCard title="Run Setup" subtitle="Agenda + topics + persona selection">
             <div className="grid gap-3">
               <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
+                Industry Preset
+                <select
+                  className="rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-[color:var(--ink-1)]"
+                  defaultValue=""
+                  onChange={(event) => applyPreset(event.target.value)}
+                >
+                  <option value="" disabled>
+                    Select a sample packet
+                  </option>
+                  {INDUSTRY_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
                 Agenda
                 <textarea
                   value={agenda}
@@ -135,7 +188,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                           : "border-[color:var(--line)] bg-white text-[color:var(--ink-2)]"
                       }`}
                     >
-                      {persona.name}
+                      <p className="font-semibold">{persona.name}</p>
+                      <p className="text-xs opacity-80">{persona.lens}</p>
                     </button>
                   );
                 })}
@@ -176,6 +230,33 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               </div>
             )}
           </SectionCard>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="8-Bit Virtual Board Roam"
+        subtitle="Move around the boardroom and inspect each member's comment + reasoning-summary thought bubbles"
+      >
+        <ShadowBoard8BitRoam personas={roamPersonas} />
+      </SectionCard>
+
+      <SectionCard title="Industry Packet References" subtitle="Web-researched packet options for different demo narratives">
+        <div className="grid gap-3 md:grid-cols-3">
+          {INDUSTRY_PRESETS.map((preset) => (
+            <article key={preset.id} className="rounded-2xl border border-[color:var(--line)] bg-white p-3">
+              <h3 className="text-sm font-semibold text-[color:var(--ink-1)]">{preset.label}</h3>
+              <p className="mb-2 text-xs text-[color:var(--ink-3)]">{preset.packetPath}</p>
+              <ul className="list-disc space-y-1 pl-4 text-xs text-[color:var(--ink-2)]">
+                {preset.sourceLinks.map((source) => (
+                  <li key={source.url}>
+                    <a className="underline" href={source.url} target="_blank" rel="noreferrer">
+                      {source.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
         </div>
       </SectionCard>
 

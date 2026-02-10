@@ -5,6 +5,7 @@ Local-first OpenAI-powered demo for:
 - Morgan raise-hand insight queue
 - Persona studio with guided interview synthesis
 - 8-agent shadow board simulation and report generation
+- 8-bit virtual board roam with persona thought bubbles
 
 ## Tech Stack
 - Next.js App Router + TypeScript
@@ -60,8 +61,17 @@ Open `http://localhost:3000`.
 - Redaction enabled by default.
 - Raw audio persistence disabled.
 
+## Industry Sample Packets
+- `data/industry-agenda-packets/healthcare-provider-openai-shadow-board.md`
+- `data/industry-agenda-packets/financial-services-openai-shadow-board.md`
+- `data/industry-agenda-packets/retail-commerce-openai-shadow-board.md`
+
+## Innovation Persona Seed
+- `data/sample-interview-openai-innovation-board-member.md`
+
 ## Docs
 - `docs/requirements/morgan-phase-brief.md`
 - `docs/architecture.md`
 - `docs/api.md`
 - `docs/runbooks/demo-script.md`
+- `docs/worktrees.md`

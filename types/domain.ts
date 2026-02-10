@@ -95,7 +95,9 @@ export interface ShadowBoardRecommendation {
 export interface PersonaDebateOutput {
   personaId: string;
   personaName: string;
+  comment: string;
   viewpoint: string;
+  thinkingSteps: string[];
   risks: string[];
   recommendations: string[];
   challengeQuestions: string[];
