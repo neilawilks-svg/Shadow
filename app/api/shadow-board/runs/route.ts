@@ -7,6 +7,8 @@ const schema = z.object({
   agenda: z.string().min(1),
   topics: z.array(z.string()).min(1),
   personaIds: z.array(z.string()).min(1).max(12),
+  meetingArtifacts: z.array(z.string()).max(24).optional().default([]),
+  transcriptSeed: z.array(z.string()).max(60).optional().default([]),
 });
 
 export async function POST(request: Request) {

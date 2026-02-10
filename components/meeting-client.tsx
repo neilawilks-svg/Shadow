@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/badge";
 import { CostPanel } from "@/components/cost-panel";
 import { SectionCard } from "@/components/section-card";
+import { buildRealtimeGaSessionUpdateEvent } from "@/lib/audio/realtime-transcription";
 
 interface DeviceOption {
   deviceId: string;
@@ -39,6 +40,7 @@ export function MeetingClientPage() {
   );
   const [inviteResponse, setInviteResponse] = useState<string>("");
   const [manualTranscript, setManualTranscript] = useState("");
+  const [connectionHint, setConnectionHint] = useState<string>("");
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -127,7 +129,15 @@ export function MeetingClientPage() {
     }
 
     const tokenPayload = await tokenResponse.json();
-    const token = tokenPayload?.value;
+    const token = tokenPayload?.value ?? tokenPayload?.client_secret?.value;
+    const transcriptionModel =
+      tokenPayload?.transcriptionModel ??
+      tokenPayload?.session?.audio?.input?.transcription?.model ??
+      "gpt-4o-mini-transcribe";
+    const transcriptionLanguage =
+      tokenPayload?.transcriptionLanguage ??
+      tokenPayload?.session?.audio?.input?.transcription?.language ??
+      "en";
 
     if (!token) {
       throw new Error("Realtime client secret missing.");
@@ -141,39 +151,32 @@ export function MeetingClientPage() {
     socketRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: "transcription_session.update",
-          input_audio_format: "pcm16",
-          input_audio_transcription: {
-            model: "gpt-4o-mini-transcribe",
-            prompt: "",
-            language: "en",
-          },
-          turn_detection: {
-            type: "server_vad",
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 500,
-          },
-          input_audio_noise_reduction: {
-            type: "near_field",
-          },
-        }),
+      const sessionUpdate = buildRealtimeGaSessionUpdateEvent(
+        transcriptionModel,
+        transcriptionLanguage,
       );
+      ws.send(JSON.stringify(sessionUpdate));
+      setConnectionHint(`Realtime connected with ${transcriptionModel}.`);
     };
 
     ws.onmessage = (message) => {
       try {
         const event = JSON.parse(String(message.data));
-        const transcriptText =
-          event?.transcript ??
-          event?.text ??
-          event?.item?.content?.[0]?.transcript ??
-          event?.item?.content?.[0]?.text;
+        const eventType = event?.type;
+        const transcriptText = extractTranscriptText(event);
 
-        if (typeof transcriptText === "string" && transcriptText.trim()) {
+        if (
+          typeof transcriptText === "string" &&
+          transcriptText.trim() &&
+          (eventType === "conversation.item.input_audio_transcription.completed" ||
+            eventType === "transcription.completed" ||
+            eventType === "transcript.completed")
+        ) {
           void sendTranscriptSegment(transcriptText.trim(), "meeting");
+        }
+
+        if (eventType === "error" && typeof event?.error?.message === "string") {
+          setError(`Realtime transcription error: ${event.error.message}`);
         }
       } catch {
         // ignore malformed messages
@@ -184,8 +187,18 @@ export function MeetingClientPage() {
       setError(
         "Realtime WebSocket connection failed. You can continue using manual transcript input while testing.",
       );
+      setConnectionHint("Realtime connection error. Manual transcript remains available.");
     };
-  }, [sendTranscriptSegment]);
+
+    ws.onclose = (event) => {
+      if (event.code === 1000 || status === "stopped") {
+        return;
+      }
+      setConnectionHint(
+        `Realtime disconnected (code ${event.code || 1005}). You can continue with manual transcript input.`,
+      );
+    };
+  }, [sendTranscriptSegment, status]);
 
   const startAudioPipeline = useCallback(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -276,9 +289,11 @@ export function MeetingClientPage() {
       await startAudioPipeline();
 
       setStatus("active");
+      setConnectionHint("Streaming audio to OpenAI realtime transcription.");
     } catch (caught) {
       setStatus("failed");
       setError(caught instanceof Error ? caught.message : "Failed to start meeting capture.");
+      setConnectionHint("Failed to initialize realtime streaming.");
     }
   }, [consentAccepted, startAudioPipeline, startRealtimeTranscriptionSocket]);
 
@@ -299,6 +314,7 @@ export function MeetingClientPage() {
     eventSourceRef.current = null;
 
     setStatus("stopped");
+    setConnectionHint("Meeting capture stopped.");
   }, []);
 
   const inviteMorgan = useCallback(async () => {
@@ -388,6 +404,7 @@ export function MeetingClientPage() {
               </div>
 
               <p className="text-xs text-[color:var(--ink-3)]">{supportHint}</p>
+              {connectionHint ? <p className="text-xs text-[color:var(--ink-3)]">{connectionHint}</p> : null}
 
               <div className="flex flex-wrap gap-2">
                 <button
@@ -548,4 +565,32 @@ function bytesToBase64(bytes: Uint8Array): string {
   }
 
   return btoa(binary);
+}
+
+function extractTranscriptText(event: Record<string, unknown>): string | null {
+  const direct =
+    (typeof event?.transcript === "string" && event.transcript) ||
+    (typeof event?.text === "string" && event.text) ||
+    null;
+
+  if (direct) {
+    return direct;
+  }
+
+  const item = event?.item as
+    | {
+        content?: Array<{ transcript?: string; text?: string }>;
+      }
+    | undefined;
+
+  const fromItem = item?.content?.[0];
+  if (typeof fromItem?.transcript === "string" && fromItem.transcript.trim()) {
+    return fromItem.transcript;
+  }
+
+  if (typeof fromItem?.text === "string" && fromItem.text.trim()) {
+    return fromItem.text;
+  }
+
+  return null;
 }

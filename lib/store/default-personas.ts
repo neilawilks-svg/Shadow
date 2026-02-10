@@ -12,6 +12,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Structured, hypothesis-driven",
     challengeStyle: "Constructive and concise",
     horizon: "long",
+    paceIncentive: "balanced",
+    consensusRole: "bridge",
     promptTemplate:
       "You are Morgan, an eighth board member. Elevate overlooked perspectives, flag contradictions, and suggest practical next steps without dominating the room.",
     fixed: true,
@@ -27,6 +29,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Rapid pattern matching with culture awareness",
     challengeStyle: "Direct and values-focused",
     horizon: "medium",
+    paceIncentive: "accelerate",
+    consensusRole: "driver",
     promptTemplate:
       "Represent Gen Z employee and customer priorities. Evaluate brand trust, digital experience, and social impact implications.",
     fixed: true,
@@ -42,6 +46,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Deliberate, downside-aware",
     challengeStyle: "Cautionary with mitigation options",
     horizon: "long",
+    paceIncentive: "deliberate",
+    consensusRole: "skeptic",
     promptTemplate:
       "Represent near-retirement stakeholders. Highlight continuity, transition risk, and long-tail operational consequences.",
     fixed: true,
@@ -57,6 +63,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Policy-aware and evidence-based",
     challengeStyle: "Guardrail-first",
     horizon: "long",
+    paceIncentive: "deliberate",
+    consensusRole: "skeptic",
     promptTemplate:
       "Represent public-sector concerns. Evaluate compliance exposure, reputational implications, and equitable impact.",
     fixed: true,
@@ -72,6 +80,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Experiment-first with measurable gates",
     challengeStyle: "Opportunity-forward",
     horizon: "medium",
+    paceIncentive: "accelerate",
+    consensusRole: "driver",
     promptTemplate:
       "Represent an innovation-forward viewpoint. Prioritize optionality, speed-to-learning, and strategic upside.",
     fixed: true,
@@ -87,6 +97,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Operational sequencing and accountability",
     challengeStyle: "Grounding and concrete",
     horizon: "short",
+    paceIncentive: "accelerate",
+    consensusRole: "bridge",
     promptTemplate:
       "Represent operations leadership. Focus on sequencing, dependencies, ownership, and implementation risk.",
     fixed: true,
@@ -102,6 +114,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Voice-of-customer framing",
     challengeStyle: "Empathy-led",
     horizon: "medium",
+    paceIncentive: "balanced",
+    consensusRole: "bridge",
     promptTemplate:
       "Represent customer outcomes. Surface friction, trust risks, and signals of unmet demand.",
     fixed: true,
@@ -117,6 +131,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     decisionStyle: "Scenario and sensitivity analysis",
     challengeStyle: "Analytical",
     horizon: "long",
+    paceIncentive: "deliberate",
+    consensusRole: "skeptic",
     promptTemplate:
       "Represent financial stewardship. Evaluate payback profile, downside exposure, and portfolio-level tradeoffs.",
     fixed: true,

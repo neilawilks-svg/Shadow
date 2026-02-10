@@ -13,6 +13,7 @@ interface Persona {
   name: string;
   fixed: boolean;
   lens: string;
+  paceIncentive?: "accelerate" | "balanced" | "deliberate";
 }
 
 interface RunResult {
@@ -47,6 +48,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>(initialPersonas.map((persona) => persona.id));
   const [agenda, setAgenda] = useState("Evaluate expansion strategy for an AI-enabled board advisory offer.");
   const [topics, setTopics] = useState("market positioning, risk controls, operating model, talent readiness");
+  const [meetingArtifacts, setMeetingArtifacts] = useState(
+    "Board packet summary: baseline operating assumptions and constraints.\nBoard packet summary: current risk posture and control expectations.",
+  );
   const [status, setStatus] = useState("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [reportMarkdown, setReportMarkdown] = useState("");
@@ -59,6 +63,15 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         .map((item) => item.trim())
         .filter(Boolean),
     [topics],
+  );
+
+  const meetingArtifactList = useMemo(
+    () =>
+      meetingArtifacts
+        .split(/\r?\n+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [meetingArtifacts],
   );
 
   const roamPersonas = useMemo(() => {
@@ -105,6 +118,13 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
     setAgenda(preset.agenda);
     setTopics(preset.topics.join(", "));
+    setMeetingArtifacts(
+      [
+        `Industry packet: ${preset.label}`,
+        `Reference packet path: ${preset.packetPath}`,
+        ...preset.sourceLinks.map((source) => `${source.label} (${source.url})`),
+      ].join("\n"),
+    );
   }, []);
 
   const runShadowBoard = useCallback(async () => {
@@ -118,6 +138,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         agenda,
         topics: topicArray,
         personaIds: selectedPersonaIds,
+        meetingArtifacts: meetingArtifactList,
+        transcriptSeed: [`Board Chair: Agenda - ${agenda}`, `Board Chair: Focus topics - ${topicArray.join("; ")}`],
       }),
     });
 
@@ -136,7 +158,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       const reportPayload = await reportResponse.json();
       setReportMarkdown(reportPayload.markdown);
     }
-  }, [agenda, selectedPersonaIds, topicArray]);
+  }, [agenda, selectedPersonaIds, topicArray, meetingArtifactList]);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 md:px-8 md:py-8">
@@ -182,6 +204,14 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                   className="rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-[color:var(--ink-1)]"
                 />
               </label>
+              <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
+                Meeting Artifacts (one line per artifact)
+                <textarea
+                  value={meetingArtifacts}
+                  onChange={(event) => setMeetingArtifacts(event.target.value)}
+                  className="min-h-24 rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm text-[color:var(--ink-1)]"
+                />
+              </label>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 {personas.map((persona) => {
@@ -199,6 +229,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                     >
                       <p className="font-semibold">{persona.name}</p>
                       <p className="text-xs opacity-80">{persona.lens}</p>
+                      <p className="text-[10px] opacity-75">
+                        Pace: {persona.paceIncentive ? persona.paceIncentive : "balanced"}
+                      </p>
                     </button>
                   );
                 })}

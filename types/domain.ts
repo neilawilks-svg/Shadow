@@ -18,6 +18,8 @@ export interface PersonaProfile {
   decisionStyle: string;
   challengeStyle: string;
   horizon: "short" | "medium" | "long";
+  paceIncentive?: "accelerate" | "balanced" | "deliberate";
+  consensusRole?: "driver" | "bridge" | "skeptic";
   promptTemplate: string;
   fixed: boolean;
   createdAt: string;
@@ -110,6 +112,8 @@ export interface ShadowBoardRun {
   agenda: string;
   topics: string[];
   personaIds: string[];
+  meetingArtifacts?: string[];
+  sharedTranscript?: string[];
   status: "queued" | "running" | "completed" | "failed";
   startedAt: string;
   finishedAt?: string;

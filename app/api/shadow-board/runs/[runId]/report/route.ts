@@ -18,6 +18,11 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
     "## Topics",
     ...run.topics.map((topic) => `- ${topic}`),
     "",
+    "## Meeting Artifacts",
+    ...(run.meetingArtifacts && run.meetingArtifacts.length > 0
+      ? run.meetingArtifacts.map((artifact) => `- ${artifact}`)
+      : ["- none provided"]),
+    "",
     "## Consensus",
     run.consensusSummary,
     "",
@@ -29,6 +34,11 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
       (item) =>
         `- **${item.theme}**: ${item.recommendation} (confidence: ${Math.round(item.confidence * 100)}%)`,
     ),
+    "",
+    "## Shared Transcript (excerpt)",
+    ...(run.sharedTranscript && run.sharedTranscript.length > 0
+      ? run.sharedTranscript.slice(-30).map((line) => `- ${line}`)
+      : ["- transcript unavailable"]),
   ].join("\n");
 
   return jsonOk({ markdown, run });
