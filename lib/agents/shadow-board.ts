@@ -83,8 +83,9 @@ export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardR
             persona.promptTemplate,
             "Return concise board-style critique as valid JSON.",
             "thinkingSteps must be high-level reasoning summaries suitable for UI thought bubbles (never hidden chain-of-thought).",
-            "comments must contain 3-5 short conversational turns as if speaking across rounds in a board discussion.",
-            "Each comment should be under 180 characters and reflect a distinct turn.",
+            "comments must contain 3-5 conversational turns as if speaking across rounds in a board discussion.",
+            "Mix response length: include a blend of concise interjections and 2-3 sentence responses.",
+            "Each comment should be under 320 characters and reflect a distinct turn.",
             "Keep all arrays to max 3 items.",
           ].join("\n"),
           model: config.modelShadowBoard,
@@ -235,9 +236,9 @@ function buildFallbackComments(personaName: string, lens: string, topics: string
 
   return [
     `${personaName}: Let's define the success metric for ${topicA} before we scale investment.`,
-    `${personaName}: I support a time-boxed pilot tied to ${topicB} so we can adjust quickly.`,
-    `${personaName}: Assign one accountable executive owner with clear escalation checkpoints.`,
-    `${personaName}: Through the ${lens.toLowerCase()} lens, what tradeoffs are we underestimating?`,
+    `${personaName}: I support a time-boxed pilot tied to ${topicB} so we can adjust quickly. We should review evidence after the first milestone before expanding scope.`,
+    `${personaName}: Assign one accountable executive owner with clear escalation checkpoints. If ownership is unclear, execution risk compounds quickly.`,
+    `${personaName}: Through the ${lens.toLowerCase()} lens, what tradeoffs are we underestimating? I want that risk called out before we commit.`,
   ];
 }
 
@@ -265,7 +266,7 @@ function normalizeComments(
       if (cleaned.length === 0) {
         continue;
       }
-      normalized.add(cleaned.slice(0, 180));
+      normalized.add(cleaned.slice(0, 320));
       if (normalized.size >= MAX_COMMENTS_PER_PERSONA) {
         break;
       }
@@ -275,7 +276,7 @@ function normalizeComments(
   if (normalized.size === 0 && typeof singularComment === "string") {
     const cleaned = singularComment.trim();
     if (cleaned.length > 0) {
-      normalized.add(cleaned.slice(0, 180));
+      normalized.add(cleaned.slice(0, 320));
     }
   }
 
@@ -285,7 +286,7 @@ function normalizeComments(
     }
     const cleaned = fallbackComment.trim();
     if (cleaned.length > 0) {
-      normalized.add(cleaned.slice(0, 180));
+      normalized.add(cleaned.slice(0, 320));
     }
   }
 

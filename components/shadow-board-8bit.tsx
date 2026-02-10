@@ -12,6 +12,7 @@ interface RoamPersona {
 
 interface BoardRoamProps {
   personas: RoamPersona[];
+  simulationSeed?: string;
 }
 
 interface BoardMember extends RoamPersona {
@@ -25,6 +26,23 @@ interface ConversationTurn {
   personaName: string;
   text: string;
   round: number;
+  style: "concise" | "verbose";
+  pauseBeforeMs: number;
+  pauseAfterMs: number;
+}
+
+interface UtterancePlan {
+  text: string;
+  style: "concise" | "verbose";
+  pauseBeforeMs: number;
+  pauseAfterMs: number;
+}
+
+interface MemberTurnPlan {
+  member: BoardMember;
+  utterances: UtterancePlan[];
+  pointer: number;
+  remaining: number;
 }
 
 const WORLD_WIDTH = 1680;
@@ -47,7 +65,7 @@ const DESK_POSITIONS = [
 const SUIT_COLORS = ["#3f6cff", "#00a8a8", "#f28444", "#8f59ff", "#ff657d", "#1f9d55", "#3f7dff", "#f2a93b"];
 const SKIN_TONES = ["#f5c89c", "#f2b38b", "#d89163", "#c47a52", "#e6b58f", "#f1c7a2", "#b06d4a", "#f4bd90"];
 
-export function ShadowBoard8BitRoam({ personas }: BoardRoamProps) {
+export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" }: BoardRoamProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -69,7 +87,18 @@ export function ShadowBoard8BitRoam({ personas }: BoardRoamProps) {
     [personas],
   );
 
-  const conversationTurns = useMemo(() => buildConversationTurns(boardMembers), [boardMembers]);
+  const conversationFingerprint = useMemo(
+    () =>
+      `${simulationSeed}|${boardMembers.map((member) => `${member.id}:${member.comments.join("~")}`).join("|")}`,
+    [boardMembers, simulationSeed],
+  );
+
+  const conversationSeed = useMemo(() => hashStringToSeed(conversationFingerprint), [conversationFingerprint]);
+
+  const conversationTurns = useMemo(
+    () => buildConversationTurns(boardMembers, conversationSeed),
+    [boardMembers, conversationSeed],
+  );
 
   const activeTurn = useMemo<ConversationTurn | null>(() => {
     if (conversationTurns.length === 0) {
@@ -158,7 +187,7 @@ export function ShadowBoard8BitRoam({ personas }: BoardRoamProps) {
       return;
     }
 
-    const startDelay = 260 + (activeTurn.round % 3) * 220;
+    const startDelay = activeTurn.pauseBeforeMs;
     const typingIntervalMs = 22;
 
     let typingTimer: number | undefined;
@@ -177,7 +206,7 @@ export function ShadowBoard8BitRoam({ personas }: BoardRoamProps) {
             }
 
             if (!holdTimer) {
-              const holdMs = 900 + Math.min(1200, Math.floor(activeTurn.text.length * 18));
+              const holdMs = activeTurn.pauseAfterMs;
               holdTimer = window.setTimeout(() => {
                 setDisplayTurnIndex(-1);
                 setTypedLength(0);
@@ -353,38 +382,214 @@ export function ShadowBoard8BitRoam({ personas }: BoardRoamProps) {
           <p>
             Turn {conversationTurns.length === 0 ? 0 : (activeTurnIndex % conversationTurns.length) + 1} of {conversationTurns.length}
           </p>
-          <p>{activeTurn?.personaName ?? "Awaiting run"}</p>
+          <p>
+            {activeTurn
+              ? `${activeTurn.personaName} (${activeTurn.style === "verbose" ? "2-3 sentence" : "concise"})`
+              : "Awaiting run"}
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-function buildConversationTurns(members: BoardMember[]): ConversationTurn[] {
+function buildConversationTurns(members: BoardMember[], seed: number): ConversationTurn[] {
   if (members.length === 0) {
     return [];
   }
 
-  const maxRounds = members.reduce((max, member) => Math.max(max, member.comments.length), 0);
+  const random = createRng(seed);
+  const plans: MemberTurnPlan[] = members.map((member) => {
+    const maxTurns = Math.min(MAX_COMMENTS_PER_PERSONA, Math.max(3, member.comments.length));
+    const minTurns = Math.min(3, maxTurns);
+    const targetTurns = randomInt(random, minTurns, maxTurns);
+
+    return {
+      member,
+      utterances: buildUtterancePlans(member, targetTurns, random),
+      pointer: 0,
+      remaining: targetTurns,
+    };
+  });
+
+  const totalTurns = plans.reduce((sum, plan) => sum + plan.remaining, 0);
   const turns: ConversationTurn[] = [];
+  let round = 0;
+  let lastSpeakerId: string | null = null;
+  let exchange: { a: string; b: string; next: string; remaining: number } | null = null;
 
-  for (let round = 0; round < maxRounds; round += 1) {
-    for (const member of members) {
-      const text = member.comments[round];
-      if (!text) {
-        continue;
-      }
-
-      turns.push({
-        personaId: member.id,
-        personaName: member.name,
-        text,
-        round,
-      });
+  while (turns.length < totalTurns) {
+    const activePlans = plans.filter((plan) => plan.remaining > 0);
+    if (activePlans.length === 0) {
+      break;
     }
+
+    let speakerPlan: MemberTurnPlan | null = null;
+
+    const activeExchange: { a: string; b: string; next: string; remaining: number } | null = exchange;
+    if (activeExchange && activeExchange.remaining > 0) {
+      const preferred = findAvailablePlan(plans, activeExchange.next);
+      if (preferred) {
+        speakerPlan = preferred;
+        activeExchange.remaining -= 1;
+        activeExchange.next = activeExchange.next === activeExchange.a ? activeExchange.b : activeExchange.a;
+        if (activeExchange.remaining <= 0) {
+          exchange = null;
+        }
+      } else {
+        exchange = null;
+      }
+    }
+
+    if (!speakerPlan) {
+      speakerPlan = chooseSpeaker(activePlans, lastSpeakerId, random);
+    }
+
+    if (!speakerPlan) {
+      break;
+    }
+
+    const utterance = speakerPlan.utterances[speakerPlan.pointer] ?? speakerPlan.utterances.at(-1);
+    if (!utterance) {
+      speakerPlan.remaining = 0;
+      continue;
+    }
+
+    speakerPlan.pointer += 1;
+    speakerPlan.remaining -= 1;
+    turns.push({
+      personaId: speakerPlan.member.id,
+      personaName: speakerPlan.member.name,
+      text: utterance.text,
+      round,
+      style: utterance.style,
+      pauseBeforeMs: utterance.pauseBeforeMs,
+      pauseAfterMs: utterance.pauseAfterMs,
+    });
+
+    if (!exchange && activePlans.length > 1 && speakerPlan.remaining > 0 && random() < 0.2) {
+      const partnerCandidates = activePlans.filter(
+        (plan) => plan.member.id !== speakerPlan.member.id && plan.remaining > 0,
+      );
+      if (partnerCandidates.length > 0) {
+        const priorSpeaker =
+          lastSpeakerId && lastSpeakerId !== speakerPlan.member.id
+            ? findAvailablePlan(plans, lastSpeakerId)
+            : null;
+        const randomPartner = partnerCandidates[randomInt(random, 0, partnerCandidates.length - 1)];
+        const partner = priorSpeaker && random() < 0.65 ? priorSpeaker : randomPartner;
+
+        exchange = {
+          a: speakerPlan.member.id,
+          b: partner.member.id,
+          next: partner.member.id,
+          remaining: randomInt(random, 2, 4),
+        };
+      }
+    }
+
+    lastSpeakerId = speakerPlan.member.id;
+    round += 1;
   }
 
   return turns;
+}
+
+function buildUtterancePlans(
+  member: BoardMember,
+  targetTurns: number,
+  random: () => number,
+): UtterancePlan[] {
+  const plans: UtterancePlan[] = [];
+
+  for (let index = 0; index < targetTurns; index += 1) {
+    const base = member.comments[index % member.comments.length];
+    const style: "concise" | "verbose" = random() < 0.45 ? "concise" : "verbose";
+    const text =
+      style === "concise"
+        ? buildConciseUtterance(base, random)
+        : buildVerboseUtterance(base, member.thinkingSteps, random);
+
+    plans.push({
+      text,
+      style,
+      pauseBeforeMs: randomInt(random, 220, 960),
+      pauseAfterMs:
+        (style === "verbose" ? 1250 : 820) +
+        Math.min(1800, text.length * (style === "verbose" ? 14 : 10)) +
+        randomInt(random, 140, 520),
+    });
+  }
+
+  return plans;
+}
+
+function chooseSpeaker(
+  candidates: MemberTurnPlan[],
+  lastSpeakerId: string | null,
+  random: () => number,
+): MemberTurnPlan | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const withoutLast =
+    lastSpeakerId !== null ? candidates.filter((plan) => plan.member.id !== lastSpeakerId) : candidates;
+  const pool = withoutLast.length > 0 && random() < 0.82 ? withoutLast : candidates;
+
+  const weights = pool.map((plan) => ({
+    plan,
+    weight: 1 + plan.remaining * 0.22 + Math.min(0.5, plan.member.comments.length * 0.08),
+  }));
+
+  const totalWeight = weights.reduce((sum, item) => sum + item.weight, 0);
+  let cursor = random() * totalWeight;
+  for (const item of weights) {
+    cursor -= item.weight;
+    if (cursor <= 0) {
+      return item.plan;
+    }
+  }
+
+  return weights.at(-1)?.plan ?? pool[0] ?? null;
+}
+
+function findAvailablePlan(plans: MemberTurnPlan[], personaId: string): MemberTurnPlan | null {
+  for (const plan of plans) {
+    if (plan.member.id === personaId && plan.remaining > 0) {
+      return plan;
+    }
+  }
+
+  return null;
+}
+
+function buildConciseUtterance(base: string, random: () => number): string {
+  const first = firstSentence(base);
+  const cues = ["Quick point:", "Short take:", "Flagging this:"];
+  const cue = random() < 0.16 ? `${pickRandom(cues, random)} ` : "";
+  return clampText(`${cue}${first}`.trim(), 150);
+}
+
+function buildVerboseUtterance(base: string, thinkingSteps: string[], random: () => number): string {
+  const first = firstSentence(base);
+  const thoughts = thinkingSteps.filter((step) => step.trim().length > 0);
+  const secondSource = thoughts.length > 0 ? pickRandom(thoughts, random) : "Set one measurable checkpoint before scaling.";
+  const thirdSourcePool = [
+    "If the signal weakens, we should pivot quickly rather than defend sunk cost.",
+    "This should be reviewed again after the first decision checkpoint.",
+    "I want one explicit owner tied to this risk and timeline.",
+    "Let's test this against a downside case before full commitment.",
+  ];
+
+  const second = toSentence(secondSource);
+  let text = `${first} ${second}`;
+
+  if (random() < 0.42) {
+    text = `${text} ${pickRandom(thirdSourcePool, random)}`;
+  }
+
+  return clampText(text, 280);
 }
 
 function normalizeCommentSet(persona: RoamPersona): string[] {
@@ -442,6 +647,71 @@ function wrapBubbleLines(text: string, maxChars: number): string[] {
   }
 
   return lines;
+}
+
+function firstSentence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "We need clearer decision checkpoints before we scale.";
+  }
+
+  const sentence = trimmed.match(/[^.!?]+[.!?]?/)?.[0]?.trim() ?? trimmed;
+  return toSentence(sentence);
+}
+
+function toSentence(text: string): string {
+  const cleaned = text.trim().replace(/\s+/g, " ");
+  if (!cleaned) {
+    return "We need clearer decision checkpoints before we scale.";
+  }
+
+  if (/[.!?]$/.test(cleaned)) {
+    return cleaned;
+  }
+
+  return `${cleaned}.`;
+}
+
+function clampText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function pickRandom<T>(items: T[], random: () => number): T {
+  return items[randomInt(random, 0, Math.max(0, items.length - 1))] as T;
+}
+
+function randomInt(random: () => number, min: number, max: number): number {
+  if (max <= min) {
+    return min;
+  }
+
+  return Math.floor(random() * (max - min + 1)) + min;
+}
+
+function hashStringToSeed(value: string): number {
+  let hash = 2_166_136_261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return hash >>> 0 || 1;
+}
+
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  if (state === 0) {
+    state = 1;
+  }
+
+  return () => {
+    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
+    return state / 4_294_967_296;
+  };
 }
 
 function drawBoardroom(

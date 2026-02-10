@@ -246,7 +246,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         title="8-Bit Virtual Board Roam"
         subtitle="Move around the boardroom and inspect each member's comment + reasoning-summary thought bubbles"
       >
-        <ShadowBoard8BitRoam personas={roamPersonas} />
+        <ShadowBoard8BitRoam personas={roamPersonas} simulationSeed={runResult?.runId ?? "default-seed"} />
       </SectionCard>
 
       <SectionCard title="Industry Packet References" subtitle="Web-researched packet options for different demo narratives">
