@@ -164,14 +164,14 @@ export function DemoControlClientPage() {
               <button
                 type="button"
                 onClick={() => void runAction("/api/demo/reset", "Reset")}
-                className="rounded-full bg-[color:var(--ink-1)] px-4 py-2 text-sm font-semibold text-white"
+                className="btn-primary rounded-full px-4 py-2 text-sm font-semibold"
               >
                 Reset State
               </button>
               <button
                 type="button"
                 onClick={() => void runAction("/api/demo/seed", "Seed")}
-                className="rounded-full border border-[color:var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--ink-2)]"
+                className="rounded-full border border-[color:var(--line)] bg-[color:var(--field-bg)] px-4 py-2 text-sm font-semibold text-[color:var(--ink-2)]"
               >
                 Seed Personas
               </button>
@@ -182,7 +182,7 @@ export function DemoControlClientPage() {
           <SectionCard title="Scenario Presets" subtitle="Suggested board prompts for consistent storytelling">
             <div className="space-y-2">
               {scenarioPresets.map((scenario) => (
-                <article key={scenario.name} className="rounded-xl border border-[color:var(--line)] bg-white p-3">
+                <article key={scenario.name} className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3">
                   <h3 className="text-sm font-semibold text-[color:var(--ink-1)]">{scenario.name}</h3>
                   <p className="text-xs text-[color:var(--ink-2)]">{scenario.prompt}</p>
                 </article>
@@ -197,7 +197,7 @@ export function DemoControlClientPage() {
           <button
             type="button"
             onClick={() => void runHealthChecks()}
-            className="rounded-full bg-[color:var(--ink-1)] px-4 py-2 text-sm font-semibold text-white"
+            className="btn-primary rounded-full px-4 py-2 text-sm font-semibold"
             disabled={checking}
           >
             {checking ? "Running checks..." : "Run Health Checks"}
@@ -211,14 +211,14 @@ export function DemoControlClientPage() {
 
         {health ? (
           <div className="mb-3 grid gap-2 md:grid-cols-2">
-            <article className="rounded-xl border border-[color:var(--line)] bg-white p-3 text-xs text-[color:var(--ink-2)]">
+            <article className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3 text-xs text-[color:var(--ink-2)]">
               <p className="font-semibold">Configured Models</p>
               <p>Transcribe: {health.models.transcribe}</p>
               <p>Monitor: {health.models.monitor}</p>
               <p>Persona: {health.models.personaSynthesis}</p>
               <p>Shadow: {health.models.shadowBoard}</p>
             </article>
-            <article className="rounded-xl border border-[color:var(--line)] bg-white p-3 text-xs text-[color:var(--ink-2)]">
+            <article className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3 text-xs text-[color:var(--ink-2)]">
               <p className="font-semibold">Data Policy</p>
               <p>Persist transcripts: {String(health.dataPolicy.persistTranscripts)}</p>
               <p>Persist raw audio: {String(health.dataPolicy.persistRawAudio)}</p>
@@ -232,7 +232,10 @@ export function DemoControlClientPage() {
             <p className="text-sm text-[color:var(--ink-3)]">Run checks to view diagnostics.</p>
           ) : (
             checkResults.map((result) => (
-              <article key={result.label} className="flex items-center justify-between rounded-xl border border-[color:var(--line)] bg-white p-3">
+              <article
+                key={result.label}
+                className="flex items-center justify-between rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3"
+              >
                 <div>
                   <p className="text-sm font-semibold text-[color:var(--ink-1)]">{result.label}</p>
                   <p className="text-xs text-[color:var(--ink-3)]">{result.detail}</p>

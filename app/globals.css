@@ -1,19 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --surface-1: #f4f9ff;
-  --surface-2: #eef5ff;
-  --ink-1: #0d1b36;
-  --ink-2: #24385a;
-  --ink-3: #516485;
-  --line: rgba(20, 58, 110, 0.16);
-  --accent-1: #00b37e;
-  --accent-2: #ff9f3f;
-  --good-bg: #e8faf3;
-  --good-ink: #0e7a55;
-  --warn-bg: #fff2e5;
-  --warn-ink: #b45b00;
-  --muted-bg: #e6eefb;
+  color-scheme: light dark;
+  --surface-1: #eef8ff;
+  --surface-2: #e3f3fb;
+  --ink-1: #13334a;
+  --ink-2: #27566f;
+  --ink-3: #4b7288;
+  --line: rgba(2, 110, 129, 0.24);
+  --accent-1: #00abbd;
+  --accent-3: #0099dd;
+  --accent-2: #ff7a48;
+  --btn-blue-1: #5ba6f3;
+  --btn-blue-2: #4b90e6;
+  --btn-blue-3: #3e79d1;
+  --good-bg: #dcf8f4;
+  --good-ink: #006663;
+  --warn-bg: #fff1e8;
+  --warn-ink: #d94f04;
+  --muted-bg: #dcecf9;
+  --card-bg: rgba(255, 255, 255, 0.74);
+  --card-bg-alt: rgba(230, 246, 255, 0.88);
+  --field-bg: #f7fdff;
+  --card-shadow: 0 22px 66px rgba(11, 58, 86, 0.11);
+  --bg-grad-1: #e2f5ff;
+  --bg-grad-2: #f1fbff;
+  --bg-grad-3: #fff2e8;
+  --bg-glow-1: rgba(0, 171, 189, 0.22);
+  --bg-glow-2: rgba(255, 122, 72, 0.22);
+  --bg-glow-3: rgba(0, 153, 221, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #0e2235;
+    --surface-2: #123148;
+    --ink-1: #e8f6ff;
+    --ink-2: #c3e1ef;
+    --ink-3: #8fb5c8;
+    --line: rgba(74, 153, 186, 0.38);
+    --accent-1: #00b3ad;
+    --accent-3: #1aa7ff;
+    --accent-2: #ff7a48;
+    --btn-blue-1: #66aeff;
+    --btn-blue-2: #4f97ef;
+    --btn-blue-3: #3f7fdc;
+    --good-bg: #0f3b3a;
+    --good-ink: #73ece3;
+    --warn-bg: #4b291b;
+    --warn-ink: #ffbe9f;
+    --muted-bg: #183a51;
+    --card-bg: rgba(12, 35, 53, 0.84);
+    --card-bg-alt: rgba(15, 44, 65, 0.92);
+    --field-bg: #15344d;
+    --card-shadow: 0 24px 72px rgba(0, 0, 0, 0.42);
+    --bg-grad-1: #071a2b;
+    --bg-grad-2: #0b2b3f;
+    --bg-grad-3: #2a1c1a;
+    --bg-glow-1: rgba(0, 179, 173, 0.24);
+    --bg-glow-2: rgba(255, 122, 72, 0.2);
+    --bg-glow-3: rgba(0, 153, 221, 0.2);
+  }
 }
 
 @theme inline {
@@ -27,7 +74,7 @@
 
 body {
   margin: 0;
-  background: linear-gradient(140deg, #edf5ff 0%, #f8fbff 40%, #eef9f3 100%);
+  background: linear-gradient(140deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 40%, var(--bg-grad-3) 100%);
   color: var(--ink-1);
   font-family: var(--font-display), "Avenir Next", "Segoe UI", sans-serif;
 }
@@ -38,9 +85,49 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 8% 6%, rgba(0, 179, 126, 0.18), transparent 28%),
-    radial-gradient(circle at 92% 12%, rgba(255, 159, 63, 0.2), transparent 32%),
-    radial-gradient(circle at 78% 80%, rgba(59, 130, 246, 0.14), transparent 26%);
+    radial-gradient(circle at 8% 6%, var(--bg-glow-1), transparent 28%),
+    radial-gradient(circle at 92% 12%, var(--bg-glow-2), transparent 32%),
+    radial-gradient(circle at 78% 80%, var(--bg-glow-3), transparent 26%);
+}
+
+.surface-card {
+  background: linear-gradient(145deg, var(--card-bg) 0%, var(--card-bg-alt) 100%);
+}
+
+.surface-panel {
+  background: linear-gradient(155deg, var(--surface-2) 0%, var(--card-bg-alt) 100%);
+}
+
+.btn-primary {
+  background: linear-gradient(122deg, var(--btn-blue-1) 0%, var(--btn-blue-2) 58%, var(--btn-blue-3) 100%);
+  color: var(--surface-1);
+  box-shadow: 0 8px 18px rgba(62, 121, 209, 0.24);
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(62, 121, 209, 0.3);
+}
+
+.btn-primary:disabled {
+  filter: grayscale(0.15);
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-accent {
+  background: linear-gradient(120deg, var(--btn-blue-1) 0%, var(--btn-blue-2) 72%, var(--btn-blue-3) 100%);
+  color: var(--surface-1);
+  box-shadow: 0 8px 18px rgba(62, 121, 209, 0.22);
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease;
+}
+
+.btn-accent:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(62, 121, 209, 0.28);
 }
 
 a {

@@ -386,7 +386,7 @@ export function MeetingClientPage() {
                 <select
                   value={selectedDeviceId}
                   onChange={(event) => setSelectedDeviceId(event.target.value)}
-                  className="rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-[color:var(--ink-1)]"
+                  className="rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
                 >
                   {devices.map((device) => (
                     <option key={device.deviceId} value={device.deviceId}>
@@ -397,7 +397,7 @@ export function MeetingClientPage() {
                 <button
                   type="button"
                   onClick={() => void refreshAudioDevices()}
-                  className="rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-[color:var(--ink-2)]"
+                  className="rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-2)]"
                 >
                   Refresh Devices
                 </button>
@@ -411,14 +411,14 @@ export function MeetingClientPage() {
                   type="button"
                   onClick={() => void startMeeting()}
                   disabled={status === "starting" || status === "active"}
-                  className="rounded-full bg-[color:var(--ink-1)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  className="btn-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50"
                 >
                   {status === "active" ? "Capturing" : status === "starting" ? "Starting..." : "Start Capture"}
                 </button>
                 <button
                   type="button"
                   onClick={stopMeeting}
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--ink-2)]"
+                  className="rounded-full border border-[color:var(--line)] bg-[color:var(--field-bg)] px-4 py-2 text-sm font-semibold text-[color:var(--ink-2)]"
                 >
                   Stop
                 </button>
@@ -434,12 +434,12 @@ export function MeetingClientPage() {
                   value={manualTranscript}
                   onChange={(event) => setManualTranscript(event.target.value)}
                   placeholder="Manual transcript fallback input"
-                  className="min-h-20 w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm text-[color:var(--ink-1)]"
+                  className="min-h-20 w-full rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
                 />
                 <button
                   type="button"
                   onClick={() => void addManualSegment()}
-                  className="h-fit rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm"
+                  className="h-fit rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-2)]"
                 >
                   Add
                 </button>
@@ -452,7 +452,10 @@ export function MeetingClientPage() {
                     .slice()
                     .reverse()
                     .map((segment) => (
-                      <article key={segment.segmentId} className="rounded-lg bg-white p-2 text-sm">
+                      <article
+                        key={segment.segmentId}
+                        className="rounded-lg bg-[color:var(--card-bg)] p-2 text-sm"
+                      >
                         <div className="mb-1 flex items-center justify-between text-xs text-[color:var(--ink-3)]">
                           <span>{segment.speaker}</span>
                           <span>{new Date(segment.createdAt).toLocaleTimeString()}</span>
@@ -492,17 +495,17 @@ export function MeetingClientPage() {
                 <textarea
                   value={inviteQuestion}
                   onChange={(event) => setInviteQuestion(event.target.value)}
-                  className="min-h-24 rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm text-[color:var(--ink-1)]"
+                  className="min-h-24 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
                 />
                 <button
                   type="button"
                   onClick={() => void inviteMorgan()}
-                  className="rounded-full bg-[color:var(--accent-1)] px-4 py-2 text-sm font-semibold text-white"
+                  className="btn-accent rounded-full px-4 py-2 text-sm font-semibold"
                 >
                   Invite Morgan
                 </button>
                 {inviteResponse ? (
-                  <article className="rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm text-[color:var(--ink-1)]">
+                  <article className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3 text-sm text-[color:var(--ink-1)]">
                     {inviteResponse}
                   </article>
                 ) : null}
@@ -515,7 +518,10 @@ export function MeetingClientPage() {
                   <p className="text-sm text-[color:var(--ink-3)]">No hand-raise events yet.</p>
                 ) : (
                   handRaises.map((event) => (
-                    <article key={event.eventId} className="rounded-xl border border-[color:var(--line)] bg-white p-3">
+                    <article
+                      key={event.eventId}
+                      className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3"
+                    >
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold text-[color:var(--ink-1)]">{event.headline}</h3>
                         <span className="text-xs text-[color:var(--ink-3)]">

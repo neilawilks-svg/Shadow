@@ -49,7 +49,7 @@ export default function HomePage() {
             <Link
               key={module.href}
               href={module.href}
-              className="rounded-3xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-4 transition hover:-translate-y-0.5 hover:bg-white"
+              className="surface-panel rounded-3xl border border-[color:var(--line)] p-4 transition hover:-translate-y-0.5 hover:border-[color:var(--accent-1)] hover:shadow-[0_12px_30px_rgba(0,153,221,0.2)]"
             >
               <h2 className="mb-1 text-lg font-semibold text-[color:var(--ink-1)]">{module.title}</h2>
               <p className="text-sm text-[color:var(--ink-2)]">{module.description}</p>

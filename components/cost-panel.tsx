@@ -54,7 +54,7 @@ export function CostPanel() {
 
 function Metric({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
+    <div className="surface-panel rounded-2xl border border-[color:var(--line)] p-3">
       <p className="text-xs uppercase tracking-wide text-[color:var(--ink-3)]">{title}</p>
       <p className="mt-1 text-lg font-semibold text-[color:var(--ink-1)]">{value}</p>
     </div>
