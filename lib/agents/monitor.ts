@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import { config } from "@/lib/config";
 import { publishMeetingEvent } from "@/lib/events/meeting-event-bus";
 import { runJsonModel } from "@/lib/openai/json-response";
+import { synthesizeSpeechClip } from "@/lib/audio/tts";
 import {
+  appendMorganResponse,
   appendHandRaiseEvent,
   getMeetingSession,
   getRecentRuntimeTranscript,
@@ -42,7 +44,7 @@ export async function evaluateAndMaybeRaiseHand(sessionId: string): Promise<Inte
     }
   }
 
-  const transcript = getRecentRuntimeTranscript(sessionId, 24)
+  const transcript = (await getRecentRuntimeTranscript(sessionId, 24))
     .map((segment) => `${segment.speaker}: ${segment.text}`)
     .join("\n");
 
@@ -107,6 +109,19 @@ export async function evaluateAndMaybeRaiseHand(sessionId: string): Promise<Inte
   session.lastHandRaisedAt = new Date().toISOString();
   await updateMeetingSession(session);
   await appendHandRaiseEvent(event);
+
+  const proactiveText = `Morgan proactive insight: ${result.suggestion}`;
+  const speech = await synthesizeSpeechClip({
+    text: proactiveText,
+    sessionId,
+  }).catch(() => null);
+  await appendMorganResponse(sessionId, {
+    text: proactiveText,
+    question: "Proactive listening trigger",
+    audioPath: speech?.audioPath,
+    autoplay: true,
+  });
+
   publishMeetingEvent(sessionId, event);
 
   return candidate;
