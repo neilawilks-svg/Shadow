@@ -94,6 +94,10 @@ interface ShadowBoardClientPageProps {
   initialPersonas: Persona[];
 }
 
+interface ErrorPayload {
+  error?: string;
+}
+
 export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPageProps) {
   const streamRef = useRef<EventSource | null>(null);
   const [personas] = useState<Persona[]>(initialPersonas);
@@ -141,6 +145,17 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [runWarnings, setRunWarnings] = useState<string[]>([]);
   const [reportMarkdown, setReportMarkdown] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const payload = (await response.json().catch(() => null)) as ErrorPayload | null;
+      if (payload?.error && payload.error.trim()) {
+        return payload.error.trim();
+      }
+    }
+    return `${fallback} (HTTP ${response.status})`;
+  }, []);
 
   const topicArray = useMemo(
     () =>
@@ -343,48 +358,58 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
   const runShadowBoard = useCallback(async () => {
     setError(null);
+    if (selectedPersonaIds.length === 0) {
+      setStatus("idle");
+      setError("Select at least one persona before running the shadow board.");
+      return;
+    }
     setStatus("running");
     setRunWarnings([]);
     setReportMarkdown("");
     closeShadowStream();
 
-    const response = await fetch("/api/shadow-board/runs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agenda,
-        topics: topicArray,
-        personaIds: selectedPersonaIds,
-        meetingId: selectedMeetingId || undefined,
-        shadowSessionId: shadowSessionId || undefined,
-        documentIds: selectedDocumentIds,
-        reasoningLevel,
-        maxConversationTurns,
-        randomness,
-        meetingArtifacts: meetingArtifactList,
-        outputFormat,
-        targetWordCount,
-        transcriptSeed: [`Board Chair: Agenda - ${agenda}`, `Board Chair: Focus topics - ${topicArray.join("; ")}`],
-      }),
-    });
+    try {
+      const response = await fetch("/api/shadow-board/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agenda,
+          topics: topicArray,
+          personaIds: selectedPersonaIds,
+          meetingId: selectedMeetingId || undefined,
+          shadowSessionId: shadowSessionId || undefined,
+          documentIds: selectedDocumentIds,
+          reasoningLevel,
+          maxConversationTurns,
+          randomness,
+          meetingArtifacts: meetingArtifactList,
+          outputFormat,
+          targetWordCount,
+          transcriptSeed: [`Board Chair: Agenda - ${agenda}`, `Board Chair: Focus topics - ${topicArray.join("; ")}`],
+        }),
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setStatus("failed");
+        setError(await readErrorMessage(response, "Unable to start shadow board run."));
+        return;
+      }
+
+      const payload = (await response.json()) as RunResult;
+      setRunResult(payload);
+      setStatus(payload.status);
+      setRunWarnings(payload.warnings ?? []);
+      if (payload.status === "running") {
+        openShadowStream(payload.runId);
+      } else {
+        void fetchReport(payload.runId);
+      }
+
+      void refreshRuns();
+    } catch {
       setStatus("failed");
-      setError("Unable to start shadow board run.");
-      return;
+      setError("Unable to start shadow board run. Check your network and try again.");
     }
-
-    const payload = (await response.json()) as RunResult;
-    setRunResult(payload);
-    setStatus(payload.status);
-    setRunWarnings(payload.warnings ?? []);
-    if (payload.status === "running") {
-      openShadowStream(payload.runId);
-    } else {
-      void fetchReport(payload.runId);
-    }
-
-    void refreshRuns();
   }, [
     agenda,
     closeShadowStream,
@@ -402,7 +427,22 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     selectedPersonaIds,
     targetWordCount,
     topicArray,
+    readErrorMessage,
   ]);
+
+  useEffect(() => {
+    if (personas.length === 0 || selectedPersonaIds.length > 0) {
+      return;
+    }
+
+    const boardMemberIds = personas.filter((persona) => persona.role === "board_member").map((persona) => persona.id);
+    if (boardMemberIds.length > 0) {
+      setSelectedPersonaIds(boardMemberIds);
+      return;
+    }
+
+    setSelectedPersonaIds(personas.map((persona) => persona.id));
+  }, [personas, selectedPersonaIds.length]);
 
   useEffect(() => {
     const agendaValue = agenda.trim();
@@ -638,6 +678,11 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               >
                 {status === "running" ? "Running..." : "Run Shadow Board"}
               </button>
+              {error ? (
+                <p className="text-xs text-[color:var(--warn-ink)]">
+                  {error}
+                </p>
+              ) : null}
             </div>
           </SectionCard>
 
@@ -753,11 +798,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
       <CostPanel />
 
-      {error ? (
-        <div className="rounded-2xl border border-[color:var(--warn-ink)] bg-[color:var(--warn-bg)] px-4 py-3 text-sm text-[color:var(--warn-ink)]">
-          {error}
-        </div>
-      ) : null}
     </div>
   );
 }
