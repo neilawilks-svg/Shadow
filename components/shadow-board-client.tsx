@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/badge";
 import { CostPanel } from "@/components/cost-panel";
@@ -98,6 +98,97 @@ interface ErrorPayload {
   error?: string;
 }
 
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const tokens = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return tokens.map((token, index) => {
+    const match = token.match(/^\*\*(.+)\*\*$/);
+    if (match) {
+      return <strong key={`bold-${index}`}>{match[1]}</strong>;
+    }
+    return <span key={`text-${index}`}>{token}</span>;
+  });
+}
+
+function renderMarkdownReport(markdown: string): ReactNode[] {
+  const lines = markdown.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    const line = lines[i]?.trimEnd() ?? "";
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("# ")) {
+      blocks.push(
+        <h3 key={`h1-${key++}`} className="text-lg font-semibold text-[color:var(--ink-1)]">
+          {renderInlineMarkdown(trimmed.slice(2).trim())}
+        </h3>,
+      );
+      i += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("## ")) {
+      blocks.push(
+        <h4 key={`h2-${key++}`} className="mt-3 text-base font-semibold text-[color:var(--ink-1)]">
+          {renderInlineMarkdown(trimmed.slice(3).trim())}
+        </h4>,
+      );
+      i += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("- ")) {
+      const items: string[] = [];
+      while (i < lines.length) {
+        const candidate = lines[i]?.trim() ?? "";
+        if (!candidate.startsWith("- ")) {
+          break;
+        }
+        items.push(candidate.slice(2).trim());
+        i += 1;
+      }
+
+      blocks.push(
+        <ul key={`ul-${key++}`} className="list-disc space-y-1 pl-5 text-sm text-[color:var(--ink-2)]">
+          {items.map((item, itemIndex) => (
+            <li key={`li-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (i < lines.length) {
+      const candidate = lines[i]?.trim() ?? "";
+      if (!candidate) {
+        i += 1;
+        break;
+      }
+      if (candidate.startsWith("#") || candidate.startsWith("- ")) {
+        break;
+      }
+      paragraphLines.push(candidate);
+      i += 1;
+    }
+
+    blocks.push(
+      <p key={`p-${key++}`} className="text-sm leading-6 text-[color:var(--ink-2)]">
+        {renderInlineMarkdown(paragraphLines.join(" "))}
+      </p>,
+    );
+  }
+
+  return blocks;
+}
+
 export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPageProps) {
   const streamRef = useRef<EventSource | null>(null);
   const [personas] = useState<Persona[]>(initialPersonas);
@@ -143,7 +234,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [status, setStatus] = useState("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runWarnings, setRunWarnings] = useState<string[]>([]);
-  const [reportMarkdown, setReportMarkdown] = useState("");
+  const [reportContent, setReportContent] = useState("");
+  const [reportFormat, setReportFormat] = useState<"markdown" | "plain_text">("markdown");
   const [error, setError] = useState<string | null>(null);
 
   const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
@@ -301,8 +393,13 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     if (!reportResponse.ok) {
       return;
     }
-    const reportPayload = (await reportResponse.json()) as { content?: string; markdown?: string };
-    setReportMarkdown(reportPayload.content ?? reportPayload.markdown ?? "");
+    const reportPayload = (await reportResponse.json()) as {
+      format?: "markdown" | "plain_text";
+      content?: string;
+      markdown?: string;
+    };
+    setReportContent(reportPayload.content ?? reportPayload.markdown ?? "");
+    setReportFormat(reportPayload.format ?? "markdown");
   }, []);
 
   const openShadowStream = useCallback(
@@ -365,7 +462,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     }
     setStatus("running");
     setRunWarnings([]);
-    setReportMarkdown("");
+    setReportContent("");
+    setReportFormat(outputFormat);
     closeShadowStream();
 
     try {
@@ -790,10 +888,22 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         />
       </SectionCard>
 
-      <SectionCard title="Shadow Board Report" subtitle="Markdown packet generated for board prep review">
-        <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-2xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-xs text-[color:var(--ink-2)]">
-          {reportMarkdown || "No report generated yet."}
-        </pre>
+      <SectionCard title="Shadow Board Report" subtitle="Formatted report for board prep review">
+        <div className="max-h-96 space-y-3 overflow-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3">
+          {!reportContent ? (
+            <p className="text-sm text-[color:var(--ink-3)]">No report generated yet.</p>
+          ) : reportFormat === "plain_text" ? (
+            reportContent
+              .split(/\r?\n\r?\n+/)
+              .map((paragraph, index) => (
+                <p key={`plain-${index}`} className="text-sm leading-6 text-[color:var(--ink-2)]">
+                  {paragraph.trim()}
+                </p>
+              ))
+          ) : (
+            renderMarkdownReport(reportContent)
+          )}
+        </div>
       </SectionCard>
 
       <CostPanel />

@@ -5,11 +5,28 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function trimToWordTarget(text: string, targetWordCount: number): string {
-  const words = text.trim().split(/\s+/);
+  const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length <= targetWordCount) {
     return text;
   }
-  return `${words.slice(0, targetWordCount).join(" ")}...`;
+
+  const tokens = text.match(/\S+|\s+/g) ?? [];
+  let seenWords = 0;
+  let output = "";
+
+  for (const token of tokens) {
+    if (/\s+/.test(token)) {
+      output += token;
+      continue;
+    }
+    if (seenWords >= targetWordCount) {
+      break;
+    }
+    output += token;
+    seenWords += 1;
+  }
+
+  return `${output.trimEnd()}...`;
 }
 
 function toPlainText(markdown: string): string {
