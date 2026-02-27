@@ -26,6 +26,67 @@ export interface PersonaProfile {
   updatedAt: string;
 }
 
+export interface BoardMemberProfile extends PersonaProfile {
+  role: "speaker" | "facilitator" | "observer";
+  speakingSeat: number;
+  sourceDocIds: string[];
+  isSpeakingMember: boolean;
+}
+
+export interface BoardMemberAgentProfile {
+  personaId: string;
+  name: string;
+  executiveSummary: string;
+  coreMotivations: string[];
+  decisionHeuristics: string[];
+  supportTriggers: string[];
+  challengeTriggers: string[];
+  riskBias: string;
+  discType: string;
+  discArchetype: string;
+  energizers: string[];
+  drainers: string[];
+  strengths: string[];
+  blindSpots: string[];
+  languagePatternsToUse: string[];
+  languagePatternsToAvoid: string[];
+  sourceDocIds: string[];
+  sourcePaths: string[];
+  generatedAt: string;
+}
+
+export interface BoardMemberProfilePack {
+  generatedAt: string;
+  profiles: BoardMemberAgentProfile[];
+}
+
+export interface DocumentRecord {
+  id: string;
+  title: string;
+  sourcePath: string;
+  sourceType: "docx" | "pptx" | "pdf" | "md" | "txt" | "zip" | "other";
+  meetingDate?: string;
+  people: string[];
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  confidentiality: "local_only" | "internal";
+  vaultPath: string;
+  summary?: string;
+  chunkIds: string[];
+}
+
+export interface VaultChunk {
+  chunkId: string;
+  docId: string;
+  text: string;
+  sourcePath: string;
+  tags: string[];
+  meetingDate?: string;
+  people: string[];
+  tokenEstimate: number;
+}
+
 export interface TranscriptSegment {
   sessionId: string;
   segmentId: string;
@@ -44,6 +105,11 @@ export interface MeetingSession {
   startedAt: string;
   endedAt?: string;
   lastHandRaisedAt?: string;
+  updatedAt?: string;
+  linkedDocumentIds?: string[];
+  morganResponses?: MorganResponse[];
+  transcriptSegmentIds?: string[];
+  notes?: string[];
 }
 
 export interface InterventionCandidate {
@@ -94,6 +160,32 @@ export interface ShadowBoardRecommendation {
   confidence: number;
 }
 
+export interface BoardTurnBid {
+  personaId: string;
+  urgency_1_to_10: number;
+  shouldSpeak: boolean;
+  proposedComment: string;
+  reason: string;
+  confidence: number;
+  citations: string[];
+}
+
+export interface ShadowBoardControls {
+  reasoningLevel: number;
+  maxConversationTurns: number;
+  randomness: number;
+}
+
+export interface MorganResponse {
+  responseId: string;
+  sessionId: string;
+  text: string;
+  question?: string;
+  createdAt: string;
+  audioPath?: string;
+  autoplay?: boolean;
+}
+
 export interface PersonaDebateOutput {
   personaId: string;
   personaName: string;
@@ -109,19 +201,52 @@ export interface PersonaDebateOutput {
 
 export interface ShadowBoardRun {
   runId: string;
+  shadowSessionId?: string;
   agenda: string;
   topics: string[];
   personaIds: string[];
+  meetingId?: string;
+  documentIds?: string[];
+  controls?: ShadowBoardControls;
   meetingArtifacts?: string[];
   sharedTranscript?: string[];
+  firstSpeakerPersonaId?: string;
+  skippedPersonaIds?: string[];
+  warnings?: string[];
   status: "queued" | "running" | "completed" | "failed";
   startedAt: string;
   finishedAt?: string;
   outputs: PersonaDebateOutput[];
+  turnBids?: BoardTurnBid[];
   recommendations: ShadowBoardRecommendation[];
   consensusSummary: string;
   dissentSummary: string;
   error?: string;
+}
+
+export type ShadowBoardRunEventType =
+  | "run_started"
+  | "turn_started"
+  | "turn_committed"
+  | "run_warning"
+  | "run_completed"
+  | "run_failed";
+
+export interface ShadowBoardRunEvent {
+  eventId: string;
+  runId: string;
+  shadowSessionId?: string;
+  type: ShadowBoardRunEventType;
+  createdAt: string;
+  payload: {
+    message?: string;
+    run?: ShadowBoardRun;
+    turnIndex?: number;
+    topic?: string;
+    speakerPersonaId?: string;
+    speakerName?: string;
+    transcriptLine?: string;
+  };
 }
 
 export interface UsageMetric {
@@ -140,4 +265,13 @@ export interface UsageSummary {
   totalOutputTokens: number;
   byFeature: Record<string, number>;
   recent: UsageMetric[];
+}
+
+export interface SessionTranscriptExport {
+  sessionId: string;
+  format: "md" | "json" | "srt";
+  fileName: string;
+  contentType: string;
+  body: string;
+  generatedAt: string;
 }
