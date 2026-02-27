@@ -39,11 +39,11 @@ async function main() {
   const personasPayload = await getJson("/api/personas");
   const personaIds = (personasPayload.personas ?? [])
     .filter((persona) => persona.fixed)
-    .slice(0, 8)
+    .filter((persona) => !["dave-williams", "davi-quintiere"].includes(persona.id))
     .map((persona) => persona.id);
 
-  if (personaIds.length < 8) {
-    throw new Error("Expected 8 fixed personas for demo-ready initialization.");
+  if (personaIds.length < 9) {
+    throw new Error("Expected CAB speaking roster for demo-ready initialization.");
   }
 
   const run = await postJson("/api/shadow-board/runs", {

@@ -9,6 +9,7 @@ import { SectionCard } from "@/components/section-card";
 interface Persona {
   id: string;
   name: string;
+  role: "board_member" | "slalom_facilitator";
   lens: string;
   values: string[];
   riskPosture: "risk_averse" | "balanced" | "risk_tolerant";
@@ -16,6 +17,8 @@ interface Persona {
   challengeStyle: string;
   horizon: "short" | "medium" | "long";
   promptTemplate: string;
+  personaPdfUrl?: string;
+  personaPdfFileName?: string;
   fixed: boolean;
 }
 
@@ -33,24 +36,14 @@ interface PersonasClientPageProps {
   initialPersonas: Persona[];
 }
 
-const PERSONA_PDF_BY_ID: Record<string, string> = {
-  "anthony-battle": "/api/persona-pdfs/anthony-battle-executive-persona-profile.pdf",
-  "constantin-beier": "/api/persona-pdfs/constantin-beier-executive-persona-profile.pdf",
-  "dave-williams": "/api/persona-pdfs/dave-williams-executive-persona-profile.pdf",
-  "davi-quintiere": "/api/persona-pdfs/davi-quintiere-executive-persona-profile.pdf",
-  "dean-curtis": "/api/persona-pdfs/dean-curtis-executive-persona-profile.pdf",
-  "gabi-wagenhofer": "/api/persona-pdfs/gabi-wagenhofer-executive-persona-profile.pdf",
-  "karan-khanna": "/api/persona-pdfs/karan-khanna-executive-persona-profile.pdf",
-  "marco-van-den-berg": "/api/persona-pdfs/marco-van-den-berg-executive-persona-profile.pdf",
-  "morgan-core": "/api/persona-pdfs/morgan-executive-persona-profile.pdf",
-  "sophie-bailes": "/api/persona-pdfs/sophie-bailes-executive-persona-profile.pdf",
-  "vivek-ganotra": "/api/persona-pdfs/vivek-ganotra-executive-persona-profile.pdf",
-};
-
 export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps) {
   const [personas, setPersonas] = useState<Persona[]>(initialPersonas);
   const [personaName, setPersonaName] = useState("Board Member Candidate");
+  const [personaRole, setPersonaRole] = useState<Persona["role"]>("board_member");
   const [focusArea, setFocusArea] = useState("Strategic portfolio governance");
+  const [personaPdfUrl, setPersonaPdfUrl] = useState<string>("");
+  const [personaPdfFileName, setPersonaPdfFileName] = useState<string>("");
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [interview, setInterview] = useState<InterviewSession | null>(null);
   const [answer, setAnswer] = useState("");
   const [status, setStatus] = useState<string>("idle");
@@ -66,6 +59,39 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
   }, []);
 
   const fixedCount = useMemo(() => personas.filter((persona) => persona.fixed).length, [personas]);
+  const boardMemberCount = useMemo(
+    () => personas.filter((persona) => persona.role === "board_member").length,
+    [personas],
+  );
+  const facilitatorCount = useMemo(
+    () => personas.filter((persona) => persona.role === "slalom_facilitator").length,
+    [personas],
+  );
+
+  const uploadPersonaPdf = useCallback(async (file: File) => {
+    setError(null);
+    setUploadingPdf(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("personaId", personaName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+      const response = await fetch("/api/personas/pdf-upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        setError("Unable to upload persona PDF.");
+        return;
+      }
+      const payload = (await response.json()) as { url?: string; fileName?: string };
+      setPersonaPdfUrl(payload.url ?? "");
+      setPersonaPdfFileName(payload.fileName ?? file.name);
+    } catch {
+      setError("Unable to upload persona PDF.");
+    } finally {
+      setUploadingPdf(false);
+    }
+  }, [personaName]);
 
   const startInterview = useCallback(async () => {
     setError(null);
@@ -120,6 +146,7 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: draft.name ?? personaName,
+        role: personaRole,
         lens: draft.lens ?? focusArea,
         values: draft.values ?? ["clarity", "accountability", "long-term value"],
         riskPosture: draft.riskPosture ?? "balanced",
@@ -129,6 +156,8 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
         promptTemplate:
           draft.promptTemplate ??
           "Act as a board member persona focused on strategic clarity, explicit tradeoffs, and pragmatic recommendations.",
+        personaPdfUrl: personaPdfUrl || undefined,
+        personaPdfFileName: personaPdfFileName || undefined,
       }),
     });
 
@@ -139,8 +168,46 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
 
     setStatus("saved");
     setInterview(null);
+    setPersonaPdfUrl("");
+    setPersonaPdfFileName("");
     await refreshPersonas();
-  }, [focusArea, interview, personaName, refreshPersonas]);
+  }, [focusArea, interview, personaName, personaPdfFileName, personaPdfUrl, personaRole, refreshPersonas]);
+
+  const quickAddPersona = useCallback(async () => {
+    setError(null);
+    setStatus("saving");
+    const response = await fetch("/api/personas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: personaName,
+        role: personaRole,
+        lens: focusArea,
+        values: ["clarity", "accountability", "long-term value"],
+        riskPosture: "balanced",
+        decisionStyle: "Structured and evidence-based",
+        challengeStyle: "Constructive challenger",
+        horizon: "long",
+        promptTemplate:
+          "Act as a board member persona focused on strategic clarity, explicit tradeoffs, and pragmatic recommendations.",
+        personaPdfUrl: personaPdfUrl || undefined,
+        personaPdfFileName: personaPdfFileName || undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      setStatus("failed");
+      setError("Unable to save persona profile.");
+      return;
+    }
+    setStatus("saved");
+    setPersonaName("Board Member Candidate");
+    setFocusArea("Strategic portfolio governance");
+    setPersonaRole("board_member");
+    setPersonaPdfUrl("");
+    setPersonaPdfFileName("");
+    await refreshPersonas();
+  }, [focusArea, personaName, personaPdfFileName, personaPdfUrl, personaRole, refreshPersonas]);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 md:px-8 md:py-8">
@@ -168,12 +235,55 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
                   className="rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
                 />
               </label>
+              <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
+                Role
+                <select
+                  value={personaRole}
+                  onChange={(event) => setPersonaRole(event.target.value as Persona["role"])}
+                  className="rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
+                >
+                  <option value="board_member">Board Member</option>
+                  <option value="slalom_facilitator">Slalom Facilitator</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
+                Persona PDF
+                <div className="flex items-center gap-2">
+                  <label className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] px-3 py-2 text-sm text-[color:var(--ink-2)]">
+                    {uploadingPdf ? "Uploading..." : "Upload PDF"}
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) {
+                          void uploadPersonaPdf(file);
+                        }
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  {personaPdfFileName ? (
+                    <span className="text-xs text-[color:var(--ink-3)]">{personaPdfFileName}</span>
+                  ) : (
+                    <span className="text-xs text-[color:var(--ink-3)]">No PDF attached</span>
+                  )}
+                </div>
+              </label>
               <button
                 type="button"
                 onClick={() => void startInterview()}
                 className="btn-primary rounded-full px-4 py-2 text-sm font-semibold"
               >
                 Start Guided Interview
+              </button>
+              <button
+                type="button"
+                onClick={() => void quickAddPersona()}
+                className="rounded-full border border-[color:var(--line)] bg-[color:var(--field-bg)] px-4 py-2 text-sm font-semibold text-[color:var(--ink-2)]"
+              >
+                Add Persona Without Interview
               </button>
             </div>
 
@@ -221,15 +331,21 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
             ) : null}
           </SectionCard>
 
-          <SectionCard title="Persona Library" subtitle="8 fixed personas + saved interview personas">
+          <SectionCard
+            title="Persona Library"
+            subtitle={`${fixedCount} fixed + ${personas.length - fixedCount} custom | ${boardMemberCount} board members, ${facilitatorCount} facilitators`}
+          >
             <div className="grid gap-3">
               {personas.map((persona) => {
-                const pdfLink = PERSONA_PDF_BY_ID[persona.id];
+                const pdfLink = persona.personaPdfUrl;
                 const card = (
                   <>
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold text-[color:var(--ink-1)]">{persona.name}</h3>
-                      <Badge label={persona.fixed ? "Fixed" : "Custom"} tone={persona.fixed ? "neutral" : "good"} />
+                      <div className="flex items-center gap-2">
+                        <Badge label={persona.role === "board_member" ? "Board Member" : "Slalom Facilitator"} tone="neutral" />
+                        <Badge label={persona.fixed ? "Fixed" : "Custom"} tone={persona.fixed ? "neutral" : "good"} />
+                      </div>
                     </div>
                     <p className="text-sm text-[color:var(--ink-2)]">{persona.lens}</p>
                     <p className="mt-1 text-xs text-[color:var(--ink-3)]">

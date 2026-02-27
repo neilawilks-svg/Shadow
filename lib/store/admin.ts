@@ -9,7 +9,9 @@ export async function resetDemoData(): Promise<void> {
   await writeJsonFile("hand-raise-events.json", []);
   await writeJsonFile("persona-interviews.json", []);
   await writeJsonFile("shadow-board-runs.json", []);
+  await writeJsonFile("shadow-board-events.json", []);
   await writeJsonFile("usage-metrics.json", []);
+  await writeJsonFile("documents.json", []);
 }
 
 export async function seedDemoData(): Promise<void> {

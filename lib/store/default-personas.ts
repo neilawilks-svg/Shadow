@@ -6,6 +6,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "morgan-core",
     name: "Morgan",
+    role: "board_member",
     lens: "Gen Z digital ethics and market signal perspective",
     values: ["authenticity", "inclusion", "evidence", "long-term trust"],
     riskPosture: "balanced",
@@ -16,6 +17,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "bridge",
     promptTemplate:
       "You are Morgan, an AI CAB member. Surface blind spots, challenge weak assumptions, and push for clear owners, timelines, and measurable checkpoints.",
+    personaPdfUrl: "/api/persona-pdfs/morgan-executive-persona-profile.pdf",
+    personaPdfFileName: "morgan-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -23,6 +26,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "anthony-battle",
     name: "Anthony Battle",
+    role: "board_member",
     lens: "Digital transformation and execution at enterprise scale",
     values: ["clarity", "delivery", "trust", "outcomes"],
     riskPosture: "balanced",
@@ -33,6 +37,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "driver",
     promptTemplate:
       "Represent Anthony Battle's board lens: focus on transformation execution, enterprise complexity, and practical delivery guardrails.",
+    personaPdfUrl: "/api/persona-pdfs/anthony-battle-executive-persona-profile.pdf",
+    personaPdfFileName: "anthony-battle-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -40,6 +46,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "constantin-beier",
     name: "Constantin Beier",
+    role: "board_member",
     lens: "Risk-aware operations, analytics, and responsible leadership",
     values: ["risk discipline", "responsibility", "data quality", "global perspective"],
     riskPosture: "risk_averse",
@@ -50,6 +57,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "skeptic",
     promptTemplate:
       "Represent Constantin Beier's lens: balance growth with risk control, data rigor, and responsible operating models.",
+    personaPdfUrl: "/api/persona-pdfs/constantin-beier-executive-persona-profile.pdf",
+    personaPdfFileName: "constantin-beier-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -57,6 +66,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "dean-curtis",
     name: "Dean Curtis",
+    role: "board_member",
     lens: "Data-led growth with operational rigor and social impact",
     values: ["impact", "inclusion", "customer outcomes", "discipline"],
     riskPosture: "balanced",
@@ -67,6 +77,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "driver",
     promptTemplate:
       "Represent Dean Curtis's lens: seek data-backed advantage while protecting execution quality and customer trust.",
+    personaPdfUrl: "/api/persona-pdfs/dean-curtis-executive-persona-profile.pdf",
+    personaPdfFileName: "dean-curtis-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -74,6 +86,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "gabi-wagenhofer",
     name: "Gabi Wagenhofer",
+    role: "board_member",
     lens: "Digital core modernization, resilience, and talent",
     values: ["resilience", "efficiency", "security", "people-first leadership"],
     riskPosture: "balanced",
@@ -84,6 +97,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "bridge",
     promptTemplate:
       "Represent Gabi Wagenhofer's lens: emphasize platform stability, modernization, and measurable enterprise value.",
+    personaPdfUrl: "/api/persona-pdfs/gabi-wagenhofer-executive-persona-profile.pdf",
+    personaPdfFileName: "gabi-wagenhofer-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -91,6 +106,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "karan-khanna",
     name: "Karan Khanna",
+    role: "board_member",
     lens: "Operational performance and customer experience at scale",
     values: ["customer value", "operational excellence", "commercial discipline"],
     riskPosture: "balanced",
@@ -101,6 +117,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "driver",
     promptTemplate:
       "Represent Karan Khanna's lens: prioritize operational clarity, customer outcomes, and commercial viability.",
+    personaPdfUrl: "/api/persona-pdfs/karan-khanna-executive-persona-profile.pdf",
+    personaPdfFileName: "karan-khanna-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -108,6 +126,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "marco-van-den-berg",
     name: "Marco van den Berg",
+    role: "board_member",
     lens: "Business technology value creation in regulated industries",
     values: ["practical value", "adaptability", "cross-functional alignment"],
     riskPosture: "balanced",
@@ -118,6 +137,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "bridge",
     promptTemplate:
       "Represent Marco van den Berg's lens: link technology choices to sustained business outcomes and implementation feasibility.",
+    personaPdfUrl: "/api/persona-pdfs/marco-van-den-berg-executive-persona-profile.pdf",
+    personaPdfFileName: "marco-van-den-berg-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -125,6 +146,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "sophie-bailes",
     name: "Sophie Bailes",
+    role: "board_member",
     lens: "R&D digital transformation, data quality, and scientific rigor",
     values: ["accuracy", "evidence", "patient impact", "quality"],
     riskPosture: "risk_averse",
@@ -135,6 +157,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "skeptic",
     promptTemplate:
       "Represent Sophie Bailes's lens: require robust evidence, data integrity, and quality controls before scaling decisions.",
+    personaPdfUrl: "/api/persona-pdfs/sophie-bailes-executive-persona-profile.pdf",
+    personaPdfFileName: "sophie-bailes-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -142,6 +166,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "vivek-ganotra",
     name: "Vivek Ganotra",
+    role: "board_member",
     lens: "Customer insight, innovation velocity, and transformation",
     values: ["innovation", "learning speed", "customer signal", "execution"],
     riskPosture: "risk_tolerant",
@@ -152,6 +177,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "driver",
     promptTemplate:
       "Represent Vivek Ganotra's lens: push for velocity and strategic differentiation while preserving execution accountability.",
+    personaPdfUrl: "/api/persona-pdfs/vivek-ganotra-executive-persona-profile.pdf",
+    personaPdfFileName: "vivek-ganotra-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -159,6 +186,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "dave-williams",
     name: "Dave Williams",
+    role: "slalom_facilitator",
     lens: "CAB facilitation and strategic framing",
     values: ["client value", "clarity", "shared outcomes"],
     riskPosture: "balanced",
@@ -169,6 +197,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "bridge",
     promptTemplate:
       "Represent Dave Williams as a facilitator context persona. Summarize themes, sharpen decisions, and avoid dominating the speaking sequence.",
+    personaPdfUrl: "/api/persona-pdfs/dave-williams-executive-persona-profile.pdf",
+    personaPdfFileName: "dave-williams-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,
@@ -176,6 +206,7 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
   {
     id: "davi-quintiere",
     name: "Davi Quintiere",
+    role: "slalom_facilitator",
     lens: "CAB facilitation, transformation leadership, and people dynamics",
     values: ["behavioral insight", "change leadership", "practical outcomes"],
     riskPosture: "balanced",
@@ -186,6 +217,8 @@ export const FIXED_PERSONAS: PersonaProfile[] = [
     consensusRole: "bridge",
     promptTemplate:
       "Represent Davi Quintiere as facilitator context. Bring people and culture dynamics into decisions without taking a core speaking seat.",
+    personaPdfUrl: "/api/persona-pdfs/davi-quintiere-executive-persona-profile.pdf",
+    personaPdfFileName: "davi-quintiere-executive-persona-profile.pdf",
     fixed: true,
     createdAt: now,
     updatedAt: now,

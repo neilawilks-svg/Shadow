@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:py": ".venv/bin/python -m pytest tests_py -q",
+    "smoke:cab": "node scripts/smoke-cab-upgrade.mjs",
     "demo:ready": "node scripts/demo-ready.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@openai/agents": "^0.4.6",
     "@openai/agents-realtime": "^0.4.6",
     "next": "16.1.6",

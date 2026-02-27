@@ -12,6 +12,7 @@ export type InterventionPatternType =
 export interface PersonaProfile {
   id: string;
   name: string;
+  role: "board_member" | "slalom_facilitator";
   lens: string;
   values: string[];
   riskPosture: "risk_averse" | "balanced" | "risk_tolerant";
@@ -21,13 +22,15 @@ export interface PersonaProfile {
   paceIncentive?: "accelerate" | "balanced" | "deliberate";
   consensusRole?: "driver" | "bridge" | "skeptic";
   promptTemplate: string;
+  personaPdfUrl?: string;
+  personaPdfFileName?: string;
   fixed: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface BoardMemberProfile extends PersonaProfile {
-  role: "speaker" | "facilitator" | "observer";
+  boardRole: "speaker" | "facilitator" | "observer";
   speakingSeat: number;
   sourceDocIds: string[];
   isSpeakingMember: boolean;
@@ -209,6 +212,8 @@ export interface ShadowBoardRun {
   documentIds?: string[];
   controls?: ShadowBoardControls;
   meetingArtifacts?: string[];
+  outputFormat?: "markdown" | "plain_text";
+  targetWordCount?: number;
   sharedTranscript?: string[];
   firstSpeakerPersonaId?: string;
   skippedPersonaIds?: string[];

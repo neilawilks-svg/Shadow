@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { jsonCreated, jsonError } from "@/lib/http";
-import { createMeetingSession } from "@/lib/store/repository";
+import { jsonCreated, jsonError, jsonOk } from "@/lib/http";
+import { createMeetingSession, listMeetingSessions } from "@/lib/store/repository";
 
 const schema = z.object({
   title: z.string().min(1).max(140),
@@ -22,4 +22,29 @@ export async function POST(request: Request) {
 
   const session = await createMeetingSession(parsed.data);
   return jsonCreated(session);
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam ? Number.parseInt(limitParam, 10) : 100;
+
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return jsonError("Invalid limit.", 400);
+  }
+
+  const sessions = await listMeetingSessions(Math.min(limit, 500));
+  return jsonOk({
+    sessions: sessions.map((session) => ({
+      sessionId: session.sessionId,
+      title: session.title,
+      status: session.status,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      updatedAt: session.updatedAt,
+      linkedDocumentIds: session.linkedDocumentIds ?? [],
+      transcriptCount: session.transcriptSegmentIds?.length ?? 0,
+      morganResponseCount: session.morganResponses?.length ?? 0,
+    })),
+  });
 }

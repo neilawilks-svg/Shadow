@@ -67,6 +67,8 @@ async function synthesizeDraftProfile(interview: PersonaInterviewSession): Promi
     {
       model: config.modelPersonaSynthesis,
       feature: "persona_synthesis",
+      workflowName: "persona_synthesis",
+      groupId: interview.interviewId,
       systemPrompt:
         "You synthesize board-member persona profiles from interviews. Output values and decision style only. Do not imitate identity, biography, or voice.",
       userPrompt: `Interview transcript:\n${transcript}`,

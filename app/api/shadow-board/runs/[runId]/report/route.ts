@@ -1,6 +1,26 @@
 import { jsonError, jsonOk } from "@/lib/http";
 import { getShadowBoardRun } from "@/lib/store/repository";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function trimToWordTarget(text: string, targetWordCount: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= targetWordCount) {
+    return text;
+  }
+  return `${words.slice(0, targetWordCount).join(" ")}...`;
+}
+
+function toPlainText(markdown: string): string {
+  return markdown
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/^\-\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export async function GET(_: Request, context: { params: Promise<{ runId: string }> }) {
   const { runId } = await context.params;
   const run = await getShadowBoardRun(runId);
@@ -9,7 +29,7 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
     return jsonError("Shadow board run not found.", 404);
   }
 
-  const markdown = [
+  const markdownRaw = [
     `# Shadow Board Report (${run.runId})`,
     "",
     "## Agenda",
@@ -40,6 +60,16 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
       ? run.sharedTranscript.slice(-30).map((line) => `- ${line}`)
       : ["- transcript unavailable"]),
   ].join("\n");
+  const target = run.targetWordCount ?? 600;
+  const markdown = trimToWordTarget(markdownRaw, target);
+  const plainText = trimToWordTarget(toPlainText(markdownRaw), target);
 
-  return jsonOk({ markdown, run });
+  return jsonOk({
+    format: run.outputFormat ?? "markdown",
+    targetWordCount: target,
+    markdown,
+    plainText,
+    content: (run.outputFormat ?? "markdown") === "plain_text" ? plainText : markdown,
+    run,
+  });
 }

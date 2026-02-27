@@ -5,6 +5,7 @@ import { getPersonas, savePersona } from "@/lib/store/repository";
 
 const schema = z.object({
   name: z.string().min(1),
+  role: z.enum(["board_member", "slalom_facilitator"]).default("board_member"),
   lens: z.string().min(1),
   values: z.array(z.string()).min(1),
   riskPosture: z.enum(["risk_averse", "balanced", "risk_tolerant"]),
@@ -12,6 +13,8 @@ const schema = z.object({
   challengeStyle: z.string().min(1),
   horizon: z.enum(["short", "medium", "long"]),
   promptTemplate: z.string().min(1),
+  personaPdfUrl: z.string().url().optional(),
+  personaPdfFileName: z.string().min(1).max(240).optional(),
 });
 
 export async function GET() {

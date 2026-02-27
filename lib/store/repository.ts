@@ -67,10 +67,26 @@ declare global {
 const runtimeTranscripts = globalThis.__runtimeTranscripts ?? new Map<string, TranscriptSegment[]>();
 globalThis.__runtimeTranscripts = runtimeTranscripts;
 
+function normalizePersonaRole(role: unknown): PersonaProfile["role"] {
+  return role === "slalom_facilitator" ? "slalom_facilitator" : "board_member";
+}
+
+function normalizePersonaProfile(persona: PersonaProfile): PersonaProfile {
+  return {
+    ...persona,
+    role: normalizePersonaRole((persona as PersonaProfile & { role?: unknown }).role),
+    personaPdfUrl: typeof persona.personaPdfUrl === "string" && persona.personaPdfUrl.trim() ? persona.personaPdfUrl : undefined,
+    personaPdfFileName:
+      typeof persona.personaPdfFileName === "string" && persona.personaPdfFileName.trim()
+        ? persona.personaPdfFileName
+        : undefined,
+  };
+}
+
 export async function getPersonas(): Promise<PersonaProfile[]> {
   const existing = await readJsonFile<PersonaProfile[]>(PERSONAS_FILE, []);
-  const dynamic = existing.filter((persona) => !persona.fixed);
-  const merged = [...FIXED_PERSONAS, ...dynamic];
+  const dynamic = existing.filter((persona) => !persona.fixed).map(normalizePersonaProfile);
+  const merged = [...FIXED_PERSONAS.map(normalizePersonaProfile), ...dynamic];
   await writeJsonFile(PERSONAS_FILE, merged);
   return merged;
 }
@@ -80,6 +96,12 @@ export async function savePersona(persona: Omit<PersonaProfile, "id" | "createdA
   const now = new Date().toISOString();
   const record: PersonaProfile = {
     ...persona,
+    role: normalizePersonaRole((persona as { role?: unknown }).role),
+    personaPdfUrl: typeof persona.personaPdfUrl === "string" && persona.personaPdfUrl.trim() ? persona.personaPdfUrl : undefined,
+    personaPdfFileName:
+      typeof persona.personaPdfFileName === "string" && persona.personaPdfFileName.trim()
+        ? persona.personaPdfFileName
+        : undefined,
     id: persona.id ?? `persona-${randomUUID()}`,
     fixed: false,
     createdAt: now,

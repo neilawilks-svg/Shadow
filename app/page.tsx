@@ -20,7 +20,7 @@ const modules = [
     title: "Virtual Shadow Board",
     href: "/shadow-board",
     description:
-      "Run eight fixed board personas against upcoming agenda topics and synthesize consensus, dissent, and recommendations.",
+      "Run the CAB speaking roster against upcoming agenda topics and synthesize consensus, dissent, and recommendations.",
   },
   {
     title: "Demo Control",
@@ -65,7 +65,7 @@ export default function HomePage() {
           <li>Run `npm run demo:ready` to reset, seed, and pre-run a sample shadow board packet.</li>
           <li>Start app with `npm run dev` and open `/demo` to run health checks.</li>
           <li>Open `/meeting`, select `BlackHole 2ch` or `Microsoft Teams Audio`, then accept consent and start capture.</li>
-          <li>Open `/shadow-board` and use an industry preset for your first scenario.</li>
+          <li>Open `/shadow-board`, ingest local documents, then run the CAB roster simulation.</li>
         </ol>
       </SectionCard>
 
@@ -74,7 +74,7 @@ export default function HomePage() {
           <li>TypeScript full-stack Next.js app with App Router APIs.</li>
           <li>OpenAI Realtime token endpoint for transcription session init.</li>
           <li>Model-only intervention judgment with cooldown and SSE push updates.</li>
-          <li>Eight fixed personas plus guided interview synthesis for custom personas.</li>
+          <li>CAB roster personas plus guided interview synthesis for custom personas.</li>
           <li>Shadow board simulation output with consensus and dissent summaries.</li>
           <li>8-bit virtual board roam with persona thought bubbles and reasoning summaries.</li>
         </ul>

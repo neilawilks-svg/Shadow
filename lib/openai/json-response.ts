@@ -1,4 +1,6 @@
-import { getOpenAiClient, hasOpenAiKey } from "@/lib/openai/client";
+import { runAgentText } from "@/lib/agents/runtime";
+import { hasOpenAiKey } from "@/lib/openai/client";
+import { parseJsonFromText } from "@/lib/openai/json-parse";
 import { estimateCostUsd } from "@/lib/openai/pricing";
 import { appendUsageMetric } from "@/lib/store/repository";
 
@@ -7,6 +9,11 @@ interface JsonCallParams {
   feature: string;
   systemPrompt: string;
   userPrompt: string;
+  workflowName?: string;
+  groupId?: string;
+  traceId?: string;
+  temperature?: number;
+  maxTurns?: number;
 }
 
 export async function runJsonModel<T>(params: JsonCallParams, fallback: T): Promise<T> {
@@ -15,30 +22,22 @@ export async function runJsonModel<T>(params: JsonCallParams, fallback: T): Prom
   }
 
   try {
-    const client = getOpenAiClient();
-    const completion = await client.chat.completions.create({
+    const raw = await runAgentText({
       model: params.model,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `${params.systemPrompt}\nReturn valid JSON only.`,
-        },
-        {
-          role: "user",
-          content: params.userPrompt,
-        },
-      ],
-      temperature: 0.2,
+      workflowName: params.workflowName ?? params.feature,
+      groupId: params.groupId ?? params.feature,
+      traceId: params.traceId,
+      instructions: `${params.systemPrompt}\nReturn valid JSON only.`,
+      input: params.userPrompt,
+      temperature: params.temperature ?? 0.2,
+      maxTurns: params.maxTurns ?? 6,
     });
-
-    const raw = completion.choices[0]?.message?.content;
     if (!raw) {
       return fallback;
     }
 
-    const inputTokens = completion.usage?.prompt_tokens ?? 0;
-    const outputTokens = completion.usage?.completion_tokens ?? 0;
+    const inputTokens = Math.ceil(params.userPrompt.length / 4);
+    const outputTokens = Math.ceil(raw.length / 4);
 
     await appendUsageMetric({
       feature: params.feature,
@@ -48,7 +47,8 @@ export async function runJsonModel<T>(params: JsonCallParams, fallback: T): Prom
       estimatedCostUsd: estimateCostUsd(params.model, inputTokens, outputTokens),
     });
 
-    return JSON.parse(raw) as T;
+    const parsed = parseJsonFromText<T>(raw);
+    return parsed ?? fallback;
   } catch {
     return fallback;
   }
@@ -60,18 +60,18 @@ export async function runTextModel(params: JsonCallParams, fallback: string): Pr
   }
 
   try {
-    const client = getOpenAiClient();
-    const completion = await client.chat.completions.create({
+    const text = await runAgentText({
       model: params.model,
-      messages: [
-        { role: "system", content: params.systemPrompt },
-        { role: "user", content: params.userPrompt },
-      ],
-      temperature: 0.4,
+      workflowName: params.workflowName ?? params.feature,
+      groupId: params.groupId ?? params.feature,
+      traceId: params.traceId,
+      instructions: params.systemPrompt,
+      input: params.userPrompt,
+      temperature: params.temperature ?? 0.4,
+      maxTurns: params.maxTurns ?? 6,
     });
-
-    const inputTokens = completion.usage?.prompt_tokens ?? 0;
-    const outputTokens = completion.usage?.completion_tokens ?? 0;
+    const inputTokens = Math.ceil(params.userPrompt.length / 4);
+    const outputTokens = Math.ceil(text.length / 4);
 
     await appendUsageMetric({
       feature: params.feature,
@@ -81,7 +81,7 @@ export async function runTextModel(params: JsonCallParams, fallback: string): Pr
       estimatedCostUsd: estimateCostUsd(params.model, inputTokens, outputTokens),
     });
 
-    return completion.choices[0]?.message?.content ?? fallback;
+    return text || fallback;
   } catch {
     return fallback;
   }

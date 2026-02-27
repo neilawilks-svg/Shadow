@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  formatSpeakerTranscriptLine,
+  parseShadowTranscriptTurn,
+  stripSpeakerPrefix,
+} from "@/lib/agents/shadow-transcript-utils";
+
 interface RoamPersona {
   id: string;
   name: string;
@@ -13,12 +19,13 @@ interface RoamPersona {
 interface BoardRoamProps {
   personas: RoamPersona[];
   simulationSeed?: string;
+  transcriptLines?: string[];
+  active?: boolean;
 }
 
 interface BoardMember extends RoamPersona {
   x: number;
   y: number;
-  comments: string[];
 }
 
 interface ConversationTurn {
@@ -31,41 +38,32 @@ interface ConversationTurn {
   pauseAfterMs: number;
 }
 
-interface UtterancePlan {
-  text: string;
-  style: "concise" | "verbose";
-  pauseBeforeMs: number;
-  pauseAfterMs: number;
-}
-
-interface MemberTurnPlan {
-  member: BoardMember;
-  utterances: UtterancePlan[];
-  pointer: number;
-  remaining: number;
-}
-
 const WORLD_WIDTH = 1680;
 const WORLD_HEIGHT = 1040;
 const PLAYER_SPEED = 4.1;
 const TILE = 16;
-const MAX_COMMENTS_PER_PERSONA = 5;
+const TYPING_INTERVAL_MS = 12;
 
 const DESK_POSITIONS = [
-  { x: 360, y: 250 },
-  { x: 670, y: 225 },
-  { x: 990, y: 225 },
-  { x: 1300, y: 250 },
-  { x: 340, y: 700 },
-  { x: 650, y: 735 },
-  { x: 1010, y: 735 },
-  { x: 1320, y: 700 },
+  { x: 610, y: 350 },
+  { x: 730, y: 325 },
+  { x: 850, y: 318 },
+  { x: 970, y: 325 },
+  { x: 620, y: 590 },
+  { x: 740, y: 612 },
+  { x: 860, y: 612 },
+  { x: 980, y: 590 },
 ];
 
 const SUIT_COLORS = ["#3f6cff", "#00a8a8", "#f28444", "#8f59ff", "#ff657d", "#1f9d55", "#3f7dff", "#f2a93b"];
 const SKIN_TONES = ["#f5c89c", "#f2b38b", "#d89163", "#c47a52", "#e6b58f", "#f1c7a2", "#b06d4a", "#f4bd90"];
 
-export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" }: BoardRoamProps) {
+export function ShadowBoard8BitRoam({
+  personas,
+  simulationSeed = "default-seed",
+  transcriptLines = [],
+  active = false,
+}: BoardRoamProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -75,12 +73,12 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
   const [activeTurnIndex, setActiveTurnIndex] = useState(0);
   const [displayTurnIndex, setDisplayTurnIndex] = useState(-1);
   const [typedLength, setTypedLength] = useState(0);
+  const [liveTranscript, setLiveTranscript] = useState<string[]>([]);
 
   const boardMembers = useMemo<BoardMember[]>(
     () =>
       personas.slice(0, 8).map((persona, index) => ({
         ...persona,
-        comments: normalizeCommentSet(persona),
         x: DESK_POSITIONS[index]?.x ?? 300 + index * 120,
         y: DESK_POSITIONS[index]?.y ?? 300,
       })),
@@ -88,23 +86,25 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
   );
 
   const conversationFingerprint = useMemo(
-    () =>
-      `${simulationSeed}|${boardMembers.map((member) => `${member.id}:${member.comments.join("~")}`).join("|")}`,
+    () => `${simulationSeed}|${boardMembers.map((member) => member.id).join("|")}`,
     [boardMembers, simulationSeed],
   );
 
-  const conversationSeed = useMemo(() => hashStringToSeed(conversationFingerprint), [conversationFingerprint]);
+  const transcriptTurns = useMemo(
+    () => buildConversationTurnsFromTranscript(transcriptLines, boardMembers),
+    [boardMembers, transcriptLines],
+  );
 
   const conversationTurns = useMemo(
-    () => buildConversationTurns(boardMembers, conversationSeed),
-    [boardMembers, conversationSeed],
+    () => (active ? transcriptTurns : []),
+    [active, transcriptTurns],
   );
 
   const activeTurn = useMemo<ConversationTurn | null>(() => {
-    if (conversationTurns.length === 0) {
+    if (conversationTurns.length === 0 || activeTurnIndex >= conversationTurns.length) {
       return null;
     }
-    return conversationTurns[activeTurnIndex % conversationTurns.length] ?? null;
+    return conversationTurns[activeTurnIndex] ?? null;
   }, [activeTurnIndex, conversationTurns]);
 
   const activeSpeaker = useMemo(
@@ -124,10 +124,17 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
     }
 
     return {
-      left: clamp(activeSpeaker.x - camera.x - 104, 8, viewport.width - 208),
-      top: clamp(activeSpeaker.y - camera.y - 156, 8, viewport.height - 94),
+      left: clamp(activeSpeaker.x - camera.x - 156, 8, viewport.width - 322),
+      top: clamp(activeSpeaker.y - camera.y - 204, 8, viewport.height - 148),
     };
   }, [activeSpeaker, camera.x, camera.y, viewport.height, viewport.width]);
+
+  useEffect(() => {
+    setActiveTurnIndex(0);
+    setDisplayTurnIndex(-1);
+    setTypedLength(0);
+    setLiveTranscript([]);
+  }, [conversationFingerprint]);
 
   useEffect(() => {
     function updateViewport() {
@@ -188,8 +195,6 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
     }
 
     const startDelay = activeTurn.pauseBeforeMs;
-    const typingIntervalMs = 22;
-
     let typingTimer: number | undefined;
     let holdTimer: number | undefined;
 
@@ -208,14 +213,12 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
             if (!holdTimer) {
               const holdMs = activeTurn.pauseAfterMs;
               holdTimer = window.setTimeout(() => {
+                setLiveTranscript((current) =>
+                  [...current, formatSpeakerTranscriptLine(activeTurn.personaName, activeTurn.text)].slice(-120),
+                );
                 setDisplayTurnIndex(-1);
                 setTypedLength(0);
-                setActiveTurnIndex((index) => {
-                  if (conversationTurns.length === 0) {
-                    return 0;
-                  }
-                  return (index + 1) % conversationTurns.length;
-                });
+                setActiveTurnIndex((index) => Math.min(conversationTurns.length, index + 1));
               }, holdMs);
             }
 
@@ -224,7 +227,7 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
 
           return current + 1;
         });
-      }, typingIntervalMs);
+      }, TYPING_INTERVAL_MS);
     }, startDelay);
 
     return () => {
@@ -241,24 +244,43 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
   }, [activeTurn, activeTurnIndex, conversationTurns.length]);
 
   const typedText = activeTurn && displayTurnIndex === activeTurnIndex ? activeTurn.text.slice(0, typedLength) : "";
+  const transcriptRows = useMemo(() => {
+    const fallbackRows =
+      liveTranscript.length > 0
+        ? []
+        : transcriptTurns
+            .slice(0, Math.max(0, activeTurnIndex))
+            .map((turn) => formatSpeakerTranscriptLine(turn.personaName, turn.text));
+    const rows = [...fallbackRows, ...liveTranscript];
+    if (activeTurn && displayTurnIndex === activeTurnIndex) {
+      rows.push(formatSpeakerTranscriptLine(activeTurn.personaName, typedText || "..."));
+    }
+    return rows.slice(-8);
+  }, [activeTurn, activeTurnIndex, displayTurnIndex, liveTranscript, transcriptTurns, typedText]);
   const bubbleLines = useMemo(() => {
-    const lines = wrapBubbleLines(typedText, 28);
-    const visible = lines.slice(-2);
+    const lines = wrapBubbleLines(typedText, 42);
+    const visible = lines.slice(-5);
 
     if (visible.length === 0) {
       visible.push("Listening for signal...");
     }
-    while (visible.length < 2) {
+    while (visible.length < 5) {
       visible.push("");
     }
 
     if (activeTurn && typedLength < activeTurn.text.length) {
-      const last = visible[1] || visible[0];
+      const last = visible[4] || visible[3] || visible[2] || visible[1] || visible[0];
       const cursorLine = `${last}|`;
-      if (visible[1]) {
-        visible[1] = cursorLine.slice(0, 28);
+      if (visible[4]) {
+        visible[4] = cursorLine.slice(0, 42);
+      } else if (visible[3]) {
+        visible[3] = cursorLine.slice(0, 42);
+      } else if (visible[2]) {
+        visible[2] = cursorLine.slice(0, 42);
+      } else if (visible[1]) {
+        visible[1] = cursorLine.slice(0, 42);
       } else {
-        visible[0] = cursorLine.slice(0, 28);
+        visible[0] = cursorLine.slice(0, 42);
       }
     }
 
@@ -368,249 +390,89 @@ export function ShadowBoard8BitRoam({ personas, simulationSeed = "default-seed" 
         {activeSpeaker && bubblePosition ? (
           <div
             className="pointer-events-none absolute"
-            style={{ left: bubblePosition.left, top: bubblePosition.top, width: 198 }}
+            style={{ left: bubblePosition.left, top: bubblePosition.top, width: 314 }}
           >
             <div className="rounded-xl border border-[#365c95] bg-[#fdf6d1] px-2 py-1.5 shadow-[0_5px_0_0_#4f76ab]">
               <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wide text-[#1f2d49]">{activeSpeaker.name}</p>
               <p className="h-4 text-[10px] leading-4 text-[#1f2d49]">{bubbleLines[0] || ""}</p>
               <p className="h-4 text-[10px] leading-4 text-[#1f2d49]">{bubbleLines[1] || ""}</p>
+              <p className="h-4 text-[10px] leading-4 text-[#1f2d49]">{bubbleLines[2] || ""}</p>
+              <p className="h-4 text-[10px] leading-4 text-[#1f2d49]">{bubbleLines[3] || ""}</p>
+              <p className="h-4 text-[10px] leading-4 text-[#1f2d49]">{bubbleLines[4] || ""}</p>
             </div>
           </div>
         ) : null}
 
         <div className="pointer-events-none absolute bottom-2 left-2 rounded-lg border border-[#335685] bg-[#0f1f3f]/80 px-2 py-1 text-[10px] text-[#f0f6ff]">
           <p>
-            Turn {conversationTurns.length === 0 ? 0 : (activeTurnIndex % conversationTurns.length) + 1} of {conversationTurns.length}
+            Turn {Math.min(conversationTurns.length, activeTurnIndex + (activeTurn ? 1 : 0))} of {conversationTurns.length}
           </p>
           <p>
             {activeTurn
-              ? `${activeTurn.personaName} (${activeTurn.style === "verbose" ? "2-3 sentence" : "concise"})`
+              ? `${activeTurn.personaName} (${activeTurn.style === "verbose" ? "extended" : "concise"})`
               : "Awaiting run"}
           </p>
+        </div>
+
+        <div className="pointer-events-none absolute bottom-2 right-2 w-[min(42vw,380px)] rounded-lg border border-[#335685] bg-[#0f1f3f]/86 px-2 py-1.5 text-[10px] text-[#f0f6ff]">
+          <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[#b9d5ff]">Live Transcript</p>
+          <div className="max-h-28 space-y-0.5 overflow-hidden">
+            {transcriptRows.length === 0 ? (
+              <p className="text-[#afc8ee]">Waiting for first speaking turn...</p>
+            ) : (
+              transcriptRows.map((row, index) => (
+                <p key={`${index}-${row.slice(0, 18)}`} className="truncate text-[#e8f2ff]">
+                  {row}
+                </p>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function buildConversationTurns(members: BoardMember[], seed: number): ConversationTurn[] {
-  if (members.length === 0) {
+function buildConversationTurnsFromTranscript(
+  transcriptLines: string[],
+  members: BoardMember[],
+): ConversationTurn[] {
+  if (transcriptLines.length === 0 || members.length === 0) {
     return [];
   }
 
-  const random = createRng(seed);
-  const plans: MemberTurnPlan[] = members.map((member) => {
-    const maxTurns = Math.min(MAX_COMMENTS_PER_PERSONA, Math.max(3, member.comments.length));
-    const minTurns = Math.min(3, maxTurns);
-    const targetTurns = randomInt(random, minTurns, maxTurns);
-
-    return {
-      member,
-      utterances: buildUtterancePlans(member, targetTurns, random),
-      pointer: 0,
-      remaining: targetTurns,
-    };
-  });
-
-  const totalTurns = plans.reduce((sum, plan) => sum + plan.remaining, 0);
+  const memberByName = new Map(members.map((member) => [member.name.toLowerCase(), member]));
   const turns: ConversationTurn[] = [];
-  let round = 0;
-  let lastSpeakerId: string | null = null;
-  let exchange: { a: string; b: string; next: string; remaining: number } | null = null;
 
-  while (turns.length < totalTurns) {
-    const activePlans = plans.filter((plan) => plan.remaining > 0);
-    if (activePlans.length === 0) {
-      break;
-    }
-
-    let speakerPlan: MemberTurnPlan | null = null;
-
-    const activeExchange: { a: string; b: string; next: string; remaining: number } | null = exchange;
-    if (activeExchange && activeExchange.remaining > 0) {
-      const preferred = findAvailablePlan(plans, activeExchange.next);
-      if (preferred) {
-        speakerPlan = preferred;
-        activeExchange.remaining -= 1;
-        activeExchange.next = activeExchange.next === activeExchange.a ? activeExchange.b : activeExchange.a;
-        if (activeExchange.remaining <= 0) {
-          exchange = null;
-        }
-      } else {
-        exchange = null;
-      }
-    }
-
-    if (!speakerPlan) {
-      speakerPlan = chooseSpeaker(activePlans, lastSpeakerId, random);
-    }
-
-    if (!speakerPlan) {
-      break;
-    }
-
-    const utterance = speakerPlan.utterances[speakerPlan.pointer] ?? speakerPlan.utterances.at(-1);
-    if (!utterance) {
-      speakerPlan.remaining = 0;
+  for (const line of transcriptLines) {
+    const parsed = parseShadowTranscriptTurn(line);
+    if (!parsed) {
       continue;
     }
 
-    speakerPlan.pointer += 1;
-    speakerPlan.remaining -= 1;
-    turns.push({
-      personaId: speakerPlan.member.id,
-      personaName: speakerPlan.member.name,
-      text: utterance.text,
-      round,
-      style: utterance.style,
-      pauseBeforeMs: utterance.pauseBeforeMs,
-      pauseAfterMs: utterance.pauseAfterMs,
-    });
-
-    if (!exchange && activePlans.length > 1 && speakerPlan.remaining > 0 && random() < 0.2) {
-      const partnerCandidates = activePlans.filter(
-        (plan) => plan.member.id !== speakerPlan.member.id && plan.remaining > 0,
-      );
-      if (partnerCandidates.length > 0) {
-        const priorSpeaker =
-          lastSpeakerId && lastSpeakerId !== speakerPlan.member.id
-            ? findAvailablePlan(plans, lastSpeakerId)
-            : null;
-        const randomPartner = partnerCandidates[randomInt(random, 0, partnerCandidates.length - 1)];
-        const partner = priorSpeaker && random() < 0.65 ? priorSpeaker : randomPartner;
-
-        exchange = {
-          a: speakerPlan.member.id,
-          b: partner.member.id,
-          next: partner.member.id,
-          remaining: randomInt(random, 2, 4),
-        };
-      }
+    const member = memberByName.get(parsed.speaker.toLowerCase());
+    if (!member) {
+      continue;
     }
 
-    lastSpeakerId = speakerPlan.member.id;
-    round += 1;
+    const body = stripSpeakerPrefix(parsed.text, member.name);
+    if (!body) {
+      continue;
+    }
+
+    const style: "concise" | "verbose" = body.length > 240 ? "verbose" : "concise";
+    turns.push({
+      personaId: member.id,
+      personaName: member.name,
+      text: body,
+      round: turns.length,
+      style,
+      pauseBeforeMs: style === "verbose" ? 55 : 38,
+      pauseAfterMs: Math.min(900, 140 + Math.floor(body.length * (style === "verbose" ? 2.8 : 2.2))),
+    });
   }
 
   return turns;
-}
-
-function buildUtterancePlans(
-  member: BoardMember,
-  targetTurns: number,
-  random: () => number,
-): UtterancePlan[] {
-  const plans: UtterancePlan[] = [];
-
-  for (let index = 0; index < targetTurns; index += 1) {
-    const base = member.comments[index % member.comments.length];
-    const style: "concise" | "verbose" = random() < 0.45 ? "concise" : "verbose";
-    const text =
-      style === "concise"
-        ? buildConciseUtterance(base, random)
-        : buildVerboseUtterance(base, member.thinkingSteps, random);
-
-    plans.push({
-      text,
-      style,
-      pauseBeforeMs: randomInt(random, 220, 960),
-      pauseAfterMs:
-        (style === "verbose" ? 1250 : 820) +
-        Math.min(1800, text.length * (style === "verbose" ? 14 : 10)) +
-        randomInt(random, 140, 520),
-    });
-  }
-
-  return plans;
-}
-
-function chooseSpeaker(
-  candidates: MemberTurnPlan[],
-  lastSpeakerId: string | null,
-  random: () => number,
-): MemberTurnPlan | null {
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const withoutLast =
-    lastSpeakerId !== null ? candidates.filter((plan) => plan.member.id !== lastSpeakerId) : candidates;
-  const pool = withoutLast.length > 0 && random() < 0.82 ? withoutLast : candidates;
-
-  const weights = pool.map((plan) => ({
-    plan,
-    weight: 1 + plan.remaining * 0.22 + Math.min(0.5, plan.member.comments.length * 0.08),
-  }));
-
-  const totalWeight = weights.reduce((sum, item) => sum + item.weight, 0);
-  let cursor = random() * totalWeight;
-  for (const item of weights) {
-    cursor -= item.weight;
-    if (cursor <= 0) {
-      return item.plan;
-    }
-  }
-
-  return weights.at(-1)?.plan ?? pool[0] ?? null;
-}
-
-function findAvailablePlan(plans: MemberTurnPlan[], personaId: string): MemberTurnPlan | null {
-  for (const plan of plans) {
-    if (plan.member.id === personaId && plan.remaining > 0) {
-      return plan;
-    }
-  }
-
-  return null;
-}
-
-function buildConciseUtterance(base: string, random: () => number): string {
-  const first = firstSentence(base);
-  const cues = ["Quick point:", "Short take:", "Flagging this:"];
-  const cue = random() < 0.16 ? `${pickRandom(cues, random)} ` : "";
-  return clampText(`${cue}${first}`.trim(), 150);
-}
-
-function buildVerboseUtterance(base: string, thinkingSteps: string[], random: () => number): string {
-  const first = firstSentence(base);
-  const thoughts = thinkingSteps.filter((step) => step.trim().length > 0);
-  const secondSource = thoughts.length > 0 ? pickRandom(thoughts, random) : "Set one measurable checkpoint before scaling.";
-  const thirdSourcePool = [
-    "If the signal weakens, we should pivot quickly rather than defend sunk cost.",
-    "This should be reviewed again after the first decision checkpoint.",
-    "I want one explicit owner tied to this risk and timeline.",
-    "Let's test this against a downside case before full commitment.",
-  ];
-
-  const second = toSentence(secondSource);
-  let text = `${first} ${second}`;
-
-  if (random() < 0.42) {
-    text = `${text} ${pickRandom(thirdSourcePool, random)}`;
-  }
-
-  return clampText(text, 280);
-}
-
-function normalizeCommentSet(persona: RoamPersona): string[] {
-  const seed = (Array.isArray(persona.comments) && persona.comments.length > 0 ? persona.comments : [persona.comment])
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, MAX_COMMENTS_PER_PERSONA);
-
-  const fallbackLens = persona.thinkingSteps[0]?.trim() || "Stress-test strategy and execution gaps";
-
-  while (seed.length < 3) {
-    if (seed.length === 0) {
-      seed.push(`${persona.name}: Clarify which metric proves this strategy is truly working.`);
-    } else if (seed.length === 1) {
-      seed.push(`${persona.name}: Run a staged pilot and review evidence before full scale-up.`);
-    } else {
-      seed.push(`${persona.name}: ${fallbackLens}.`);
-    }
-  }
-
-  return seed;
 }
 
 function wrapBubbleLines(text: string, maxChars: number): string[] {
@@ -649,70 +511,6 @@ function wrapBubbleLines(text: string, maxChars: number): string[] {
   return lines;
 }
 
-function firstSentence(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return "We need clearer decision checkpoints before we scale.";
-  }
-
-  const sentence = trimmed.match(/[^.!?]+[.!?]?/)?.[0]?.trim() ?? trimmed;
-  return toSentence(sentence);
-}
-
-function toSentence(text: string): string {
-  const cleaned = text.trim().replace(/\s+/g, " ");
-  if (!cleaned) {
-    return "We need clearer decision checkpoints before we scale.";
-  }
-
-  if (/[.!?]$/.test(cleaned)) {
-    return cleaned;
-  }
-
-  return `${cleaned}.`;
-}
-
-function clampText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-}
-
-function pickRandom<T>(items: T[], random: () => number): T {
-  return items[randomInt(random, 0, Math.max(0, items.length - 1))] as T;
-}
-
-function randomInt(random: () => number, min: number, max: number): number {
-  if (max <= min) {
-    return min;
-  }
-
-  return Math.floor(random() * (max - min + 1)) + min;
-}
-
-function hashStringToSeed(value: string): number {
-  let hash = 2_166_136_261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16_777_619);
-  }
-
-  return hash >>> 0 || 1;
-}
-
-function createRng(seed: number): () => number {
-  let state = seed >>> 0;
-  if (state === 0) {
-    state = 1;
-  }
-
-  return () => {
-    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
-    return state / 4_294_967_296;
-  };
-}
 
 function drawBoardroom(
   ctx: CanvasRenderingContext2D,
