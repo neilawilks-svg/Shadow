@@ -34,17 +34,17 @@ interface PersonasClientPageProps {
 }
 
 const PERSONA_PDF_BY_ID: Record<string, string> = {
-  "anthony-battle": "/persona-docs/anthony-battle-executive-persona-profile.pdf",
-  "constantin-beier": "/persona-docs/constantin-beier-executive-persona-profile.pdf",
-  "dave-williams": "/persona-docs/dave-williams-executive-persona-profile.pdf",
-  "davi-quintiere": "/persona-docs/davi-quintiere-executive-persona-profile.pdf",
-  "dean-curtis": "/persona-docs/dean-curtis-executive-persona-profile.pdf",
-  "gabi-wagenhofer": "/persona-docs/gabi-wagenhofer-executive-persona-profile.pdf",
-  "karan-khanna": "/persona-docs/karan-khanna-executive-persona-profile.pdf",
-  "marco-van-den-berg": "/persona-docs/marco-van-den-berg-executive-persona-profile.pdf",
-  "morgan-core": "/persona-docs/morgan-executive-persona-profile.pdf",
-  "sophie-bailes": "/persona-docs/sophie-bailes-executive-persona-profile.pdf",
-  "vivek-ganotra": "/persona-docs/vivek-ganotra-executive-persona-profile.pdf",
+  "anthony-battle": "/api/persona-pdfs/anthony-battle-executive-persona-profile.pdf",
+  "constantin-beier": "/api/persona-pdfs/constantin-beier-executive-persona-profile.pdf",
+  "dave-williams": "/api/persona-pdfs/dave-williams-executive-persona-profile.pdf",
+  "davi-quintiere": "/api/persona-pdfs/davi-quintiere-executive-persona-profile.pdf",
+  "dean-curtis": "/api/persona-pdfs/dean-curtis-executive-persona-profile.pdf",
+  "gabi-wagenhofer": "/api/persona-pdfs/gabi-wagenhofer-executive-persona-profile.pdf",
+  "karan-khanna": "/api/persona-pdfs/karan-khanna-executive-persona-profile.pdf",
+  "marco-van-den-berg": "/api/persona-pdfs/marco-van-den-berg-executive-persona-profile.pdf",
+  "morgan-core": "/api/persona-pdfs/morgan-executive-persona-profile.pdf",
+  "sophie-bailes": "/api/persona-pdfs/sophie-bailes-executive-persona-profile.pdf",
+  "vivek-ganotra": "/api/persona-pdfs/vivek-ganotra-executive-persona-profile.pdf",
 };
 
 export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps) {
