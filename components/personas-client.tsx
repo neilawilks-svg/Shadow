@@ -33,6 +33,20 @@ interface PersonasClientPageProps {
   initialPersonas: Persona[];
 }
 
+const PERSONA_PDF_BY_ID: Record<string, string> = {
+  "anthony-battle": "/persona-docs/anthony-battle-executive-persona-profile.pdf",
+  "constantin-beier": "/persona-docs/constantin-beier-executive-persona-profile.pdf",
+  "dave-williams": "/persona-docs/dave-williams-executive-persona-profile.pdf",
+  "davi-quintiere": "/persona-docs/davi-quintiere-executive-persona-profile.pdf",
+  "dean-curtis": "/persona-docs/dean-curtis-executive-persona-profile.pdf",
+  "gabi-wagenhofer": "/persona-docs/gabi-wagenhofer-executive-persona-profile.pdf",
+  "karan-khanna": "/persona-docs/karan-khanna-executive-persona-profile.pdf",
+  "marco-van-den-berg": "/persona-docs/marco-van-den-berg-executive-persona-profile.pdf",
+  "morgan-core": "/persona-docs/morgan-executive-persona-profile.pdf",
+  "sophie-bailes": "/persona-docs/sophie-bailes-executive-persona-profile.pdf",
+  "vivek-ganotra": "/persona-docs/vivek-ganotra-executive-persona-profile.pdf",
+};
+
 export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps) {
   const [personas, setPersonas] = useState<Persona[]>(initialPersonas);
   const [personaName, setPersonaName] = useState("Board Member Candidate");
@@ -209,18 +223,46 @@ export function PersonasClientPage({ initialPersonas }: PersonasClientPageProps)
 
           <SectionCard title="Persona Library" subtitle="8 fixed personas + saved interview personas">
             <div className="grid gap-3">
-              {personas.map((persona) => (
-                <article key={persona.id} className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-[color:var(--ink-1)]">{persona.name}</h3>
-                    <Badge label={persona.fixed ? "Fixed" : "Custom"} tone={persona.fixed ? "neutral" : "good"} />
-                  </div>
-                  <p className="text-sm text-[color:var(--ink-2)]">{persona.lens}</p>
-                  <p className="mt-1 text-xs text-[color:var(--ink-3)]">
-                    {persona.decisionStyle} • {persona.challengeStyle}
-                  </p>
-                </article>
-              ))}
+              {personas.map((persona) => {
+                const pdfLink = PERSONA_PDF_BY_ID[persona.id];
+                const card = (
+                  <>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-[color:var(--ink-1)]">{persona.name}</h3>
+                      <Badge label={persona.fixed ? "Fixed" : "Custom"} tone={persona.fixed ? "neutral" : "good"} />
+                    </div>
+                    <p className="text-sm text-[color:var(--ink-2)]">{persona.lens}</p>
+                    <p className="mt-1 text-xs text-[color:var(--ink-3)]">
+                      {persona.decisionStyle} • {persona.challengeStyle}
+                    </p>
+                    {pdfLink ? (
+                      <p className="mt-2 text-xs font-semibold text-[color:var(--accent-ink)]">
+                        Open persona PDF in new tab
+                      </p>
+                    ) : null}
+                  </>
+                );
+
+                if (!pdfLink) {
+                  return (
+                    <article key={persona.id} className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3">
+                      {card}
+                    </article>
+                  );
+                }
+
+                return (
+                  <a
+                    key={persona.id}
+                    href={pdfLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-2xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3 transition hover:-translate-y-0.5 hover:border-[color:var(--accent)]"
+                  >
+                    {card}
+                  </a>
+                );
+              })}
             </div>
           </SectionCard>
         </div>
