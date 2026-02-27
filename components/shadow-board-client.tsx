@@ -237,6 +237,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [reportContent, setReportContent] = useState("");
   const [reportFormat, setReportFormat] = useState<"markdown" | "plain_text">("markdown");
   const [transcriptExpanded, setTranscriptExpanded] = useState(false);
+  const [transcriptPdfLoading, setTranscriptPdfLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -425,6 +426,37 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       setReportLoading(false);
     }
   }, [fetchReport, runResult?.runId, runs]);
+
+  const downloadTranscriptPdf = useCallback(async () => {
+    setError(null);
+    const runId = runResult?.runId ?? runs[0]?.runId;
+    if (!runId) {
+      setError("No run found to export transcript from.");
+      return;
+    }
+
+    setTranscriptPdfLoading(true);
+    try {
+      const response = await fetch(`/api/shadow-board/runs/${runId}/transcript-pdf`);
+      if (!response.ok) {
+        setError(`Unable to download transcript PDF for run ${runId}.`);
+        return;
+      }
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `${runId}-transcript.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch {
+      setError(`Unable to download transcript PDF for run ${runId}.`);
+    } finally {
+      setTranscriptPdfLoading(false);
+    }
+  }, [runResult?.runId, runs]);
 
   const openShadowStream = useCallback(
     (runId: string) => {
@@ -865,13 +897,23 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                 <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <p className="text-xs uppercase tracking-wide text-[color:var(--ink-3)]">Run Transcript</p>
-                    <button
-                      type="button"
-                      onClick={() => setTranscriptExpanded((current) => !current)}
-                      className="rounded-full border border-[color:var(--line)] px-2 py-1 text-[10px] text-[color:var(--ink-2)]"
-                    >
-                      {transcriptExpanded ? "Collapse" : "Expand"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void downloadTranscriptPdf()}
+                        disabled={transcriptPdfLoading}
+                        className="rounded-full border border-[color:var(--line)] px-2 py-1 text-[10px] text-[color:var(--ink-2)] disabled:opacity-50"
+                      >
+                        {transcriptPdfLoading ? "Downloading..." : "Download PDF"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTranscriptExpanded((current) => !current)}
+                        className="rounded-full border border-[color:var(--line)] px-2 py-1 text-[10px] text-[color:var(--ink-2)]"
+                      >
+                        {transcriptExpanded ? "Collapse" : "Expand"}
+                      </button>
+                    </div>
                   </div>
                   <div
                     className={`space-y-1 overflow-y-auto text-xs text-[color:var(--ink-2)] ${
