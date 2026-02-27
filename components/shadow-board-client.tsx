@@ -236,6 +236,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [runWarnings, setRunWarnings] = useState<string[]>([]);
   const [reportContent, setReportContent] = useState("");
   const [reportFormat, setReportFormat] = useState<"markdown" | "plain_text">("markdown");
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
@@ -839,8 +840,21 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                 </div>
 
                 <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
-                  <p className="mb-1 text-xs uppercase tracking-wide text-[color:var(--ink-3)]">Run Transcript</p>
-                  <div className="max-h-36 space-y-1 overflow-y-auto text-xs text-[color:var(--ink-2)]">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-wide text-[color:var(--ink-3)]">Run Transcript</p>
+                    <button
+                      type="button"
+                      onClick={() => setTranscriptExpanded((current) => !current)}
+                      className="rounded-full border border-[color:var(--line)] px-2 py-1 text-[10px] text-[color:var(--ink-2)]"
+                    >
+                      {transcriptExpanded ? "Collapse" : "Expand"}
+                    </button>
+                  </div>
+                  <div
+                    className={`space-y-1 overflow-y-auto text-xs text-[color:var(--ink-2)] ${
+                      transcriptExpanded ? "max-h-[75vh]" : "max-h-36"
+                    }`}
+                  >
                     {(runResult.sharedTranscript ?? []).length === 0 ? (
                       <p>No transcript lines yet.</p>
                     ) : (

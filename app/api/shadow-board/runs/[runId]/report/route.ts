@@ -38,6 +38,37 @@ function toPlainText(markdown: string): string {
     .trim();
 }
 
+function toTranscriptBullets(lines: string[]): string[] {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return ["- transcript unavailable"];
+  }
+
+  return lines.map((line, index) => {
+    const cleaned = line.trim();
+    const match = cleaned.match(/^\[Turn\s+(\d+)\]\s*(.+)$/i);
+    if (match) {
+      const turnNumber = match[1];
+      const body = match[2] ?? "";
+      const speakerMatch = body.match(/^([^:]+):\s*(.*)$/);
+      if (speakerMatch) {
+        const speaker = speakerMatch[1]?.trim() ?? "Speaker";
+        const text = speakerMatch[2]?.trim() ?? "";
+        return `- **Turn ${turnNumber} - ${speaker}:** ${text}`;
+      }
+      return `- **Turn ${turnNumber}:** ${body}`;
+    }
+
+    const fallbackSpeaker = cleaned.match(/^([^:]+):\s*(.*)$/);
+    if (fallbackSpeaker) {
+      const speaker = fallbackSpeaker[1]?.trim() ?? "Speaker";
+      const text = fallbackSpeaker[2]?.trim() ?? "";
+      return `- **${index + 1}. ${speaker}:** ${text}`;
+    }
+
+    return `- **${index + 1}.** ${cleaned}`;
+  });
+}
+
 export async function GET(_: Request, context: { params: Promise<{ runId: string }> }) {
   const { runId } = await context.params;
   const run = await getShadowBoardRun(runId);
@@ -72,10 +103,8 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
         `- **${item.theme}**: ${item.recommendation} (confidence: ${Math.round(item.confidence * 100)}%)`,
     ),
     "",
-    "## Shared Transcript (excerpt)",
-    ...(run.sharedTranscript && run.sharedTranscript.length > 0
-      ? run.sharedTranscript.slice(-30).map((line) => `- ${line}`)
-      : ["- transcript unavailable"]),
+    "## Full Transcript",
+    ...toTranscriptBullets(run.sharedTranscript ?? []),
   ].join("\n");
   const target = run.targetWordCount ?? 600;
   const markdown = trimToWordTarget(markdownRaw, target);
