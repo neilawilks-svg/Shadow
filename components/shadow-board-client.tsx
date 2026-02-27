@@ -237,6 +237,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [reportContent, setReportContent] = useState("");
   const [reportFormat, setReportFormat] = useState<"markdown" | "plain_text">("markdown");
   const [transcriptExpanded, setTranscriptExpanded] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
@@ -389,10 +390,10 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     streamRef.current = null;
   }, []);
 
-  const fetchReport = useCallback(async (runId: string) => {
+  const fetchReport = useCallback(async (runId: string): Promise<boolean> => {
     const reportResponse = await fetch(`/api/shadow-board/runs/${runId}/report`);
     if (!reportResponse.ok) {
-      return;
+      return false;
     }
     const reportPayload = (await reportResponse.json()) as {
       format?: "markdown" | "plain_text";
@@ -401,7 +402,29 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     };
     setReportContent(reportPayload.content ?? reportPayload.markdown ?? "");
     setReportFormat(reportPayload.format ?? "markdown");
+    return true;
   }, []);
+
+  const manualGenerateReport = useCallback(async () => {
+    setError(null);
+    const runId = runResult?.runId ?? runs[0]?.runId;
+    if (!runId) {
+      setError("No run found to generate a report from.");
+      return;
+    }
+
+    setReportLoading(true);
+    try {
+      const ok = await fetchReport(runId);
+      if (!ok) {
+        setError(`Unable to generate report for run ${runId}.`);
+      }
+    } catch {
+      setError(`Unable to generate report for run ${runId}.`);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [fetchReport, runResult?.runId, runs]);
 
   const openShadowStream = useCallback(
     (runId: string) => {
@@ -903,6 +926,19 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       </SectionCard>
 
       <SectionCard title="Shadow Board Report" subtitle="Formatted report for board prep review">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-xs text-[color:var(--ink-3)]">
+            {runResult?.runId ? `Run: ${runResult.runId}` : runs[0]?.runId ? `Latest run: ${runs[0].runId}` : "No run selected"}
+          </p>
+          <button
+            type="button"
+            onClick={() => void manualGenerateReport()}
+            disabled={reportLoading || (!runResult?.runId && runs.length === 0)}
+            className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] px-3 py-2 text-xs text-[color:var(--ink-2)] disabled:opacity-50"
+          >
+            {reportLoading ? "Generating..." : "Generate Report"}
+          </button>
+        </div>
         <div className="max-h-96 space-y-3 overflow-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3">
           {!reportContent ? (
             <p className="text-sm text-[color:var(--ink-3)]">No report generated yet.</p>
