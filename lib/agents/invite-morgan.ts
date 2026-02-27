@@ -69,8 +69,6 @@ export async function generateInvitedMorganResponse(sessionId: string, question:
     {
       model: config.modelMonitor,
       feature: "invite_morgan",
-      workflowName: "invite_morgan",
-      groupId: sessionId,
       systemPrompt: promptSpec.systemPrompt,
       userPrompt,
     },
