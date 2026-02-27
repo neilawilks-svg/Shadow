@@ -45,9 +45,29 @@ next-env.d.ts
 /data/*.json
 !/data/sample-agenda-packet.md
 !/data/sample-interview-source.md
+!/data/board-member-agent-profiles.json
 
 # local worktree helpers
 /worktrees/
 
 # generated demo bootstrap report
 data/demo-ready-shadow-board-report.md
+
+# board source + derived local artifacts
+/new-files/**
+/local/**
+/output/**
+/tmp/**
+*.trace.jsonl
+*-profile.md
+*-persona.md
+*-audio.*
+*.wav
+*.mp3
+*.flac
+*.aac
+
+# python local test artifacts
+__pycache__/
+.pytest_cache/
+.venv/
