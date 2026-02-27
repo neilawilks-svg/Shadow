@@ -70,6 +70,7 @@ export function ShadowBoard8BitRoam({
   const [viewport, setViewport] = useState({ width: 980, height: 560 });
   const [player, setPlayer] = useState({ x: 850, y: 520 });
   const [keys, setKeys] = useState<Set<string>>(new Set());
+  const [controlsEnabled, setControlsEnabled] = useState(false);
   const [activeTurnIndex, setActiveTurnIndex] = useState(0);
   const [displayTurnIndex, setDisplayTurnIndex] = useState(-1);
   const [typedLength, setTypedLength] = useState(0);
@@ -154,7 +155,53 @@ export function ShadowBoard8BitRoam({
   }, []);
 
   useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        setControlsEnabled(false);
+        return;
+      }
+      setControlsEnabled(Boolean(containerRef.current?.contains(target)));
+    }
+
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    function shouldIgnoreKeyboardEvent(event: KeyboardEvent): boolean {
+      if (!controlsEnabled) {
+        return true;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return true;
+      }
+
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      if (target.isContentEditable) {
+        return true;
+      }
+
+      const tagName = target.tagName.toLowerCase();
+      if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+        return true;
+      }
+
+      const role = target.getAttribute("role");
+      return role === "textbox";
+    }
+
     function onDown(event: KeyboardEvent) {
+      if (shouldIgnoreKeyboardEvent(event)) {
+        return;
+      }
       const code = event.code;
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"].includes(code)) {
         event.preventDefault();
@@ -170,6 +217,9 @@ export function ShadowBoard8BitRoam({
     }
 
     function onUp(event: KeyboardEvent) {
+      if (shouldIgnoreKeyboardEvent(event)) {
+        return;
+      }
       setKeys((current) => {
         if (!current.has(event.code)) {
           return current;
@@ -187,7 +237,7 @@ export function ShadowBoard8BitRoam({
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
     };
-  }, []);
+  }, [controlsEnabled]);
 
   useEffect(() => {
     if (!activeTurn || conversationTurns.length === 0) {
@@ -411,6 +461,9 @@ export function ShadowBoard8BitRoam({
             {activeTurn
               ? `${activeTurn.personaName} (${activeTurn.style === "verbose" ? "extended" : "concise"})`
               : "Awaiting run"}
+          </p>
+          <p className="text-[#b9d5ff]">
+            Controls: {controlsEnabled ? "active" : "click board to activate"}
           </p>
         </div>
 
