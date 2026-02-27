@@ -89,8 +89,7 @@
         "disc-profile-anthony-battle-bbb4c91b"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Anthony Battle - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Anthony Battle.docx"
+        "/persona-docs/anthony-battle-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -161,8 +160,7 @@
         "disc-profile-constantin-beier-6d587b63"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Constantin Beier - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Constantin Beier.docx"
+        "/persona-docs/constantin-beier-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -219,7 +217,7 @@
         "10 - Customer-Centric Talk: Being very client-focused, Dave's contributions often include phrases about delighting customers or being \"customer-centric.\" He might say, \"Being customer-centric is what Slalom is all about,\" to ground a conversation back to what benefits the client 44",
         "Common in his vocabulary are phrases like \"delight our clients\" or \"create amazing customer experiences.\" For instance, if evaluating a proposal, Dave will ask, \"How will this help us delight our customers?\" - reframing the discussion in terms of client impact 45",
         "It's very much Dave's style to anchor even technical or internal topics in the context of How will this ultimately help our customers?",
-        "For example, in discussing an operational change he might say, \"The outcome we're aiming for is a faster turnaround - say from 4 weeks to 2 weeks - for client deliverables.\" He loves using specifics and metrics: you'll hear him reference \"a 10% increase in productivity\" or \"500 team members and counting\" or cite an industry stat like \"84% of organizations\u2026 trust AI\" to bolster a point 46 47",
+        "For example, in discussing an operational change he might say, \"The outcome we're aiming for is a faster turnaround - say from 4 weeks to 2 weeks - for client deliverables.\" He loves using specifics and metrics: you'll hear him reference \"a 10% increase in productivity\" or \"500 team members and counting\" or cite an industry stat like \"84% of organizations… trust AI\" to bolster a point 46 47",
         "He essentially answers the unspoken \"So what does this do for us (or our clients)?\" in every statement - articulating the why and the impact, not just the what",
         "In a board meeting with non-technical members, if AI comes up, Dave might say, \"In plain terms, this AI will comb through our data and highlight patterns - essentially a smart assistant for our teams.\" 48 He avoids unnecessary jargon and acronyms unless the audience is deeply technical, and even then he'll clarify meaning"
       ],
@@ -232,7 +230,7 @@
         "dave-williams-executive-persona-profile-abcf0cbc"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Dave Williams - Executive Persona Profile.pdf"
+        "/persona-docs/dave-williams-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -257,7 +255,7 @@
         "For example, he supported the decision to invest in a cutting-edge AI pilot for an oil client's operations, even though the technology was new, because the potential efficiencies were huge and the alternative was falling behind competitors",
         "However, he framed the decision such that it was a small-scale pilot first - this was his way of taking a risk in a controlled manner",
         "Instead, he will break a risky endeavor into stages or have fallback options",
-        "Colleagues have seen that in meetings, when a bold proposal is on the table, Davi will be the one to articulate the risks openly (\"Here are the main risks: A, B, C\"), but then also propose how to handle them (\"To address risk A, we can do X\u2026\")",
+        "Colleagues have seen that in meetings, when a bold proposal is on the table, Davi will be the one to articulate the risks openly (\"Here are the main risks: A, B, C\"), but then also propose how to handle them (\"To address risk A, we can do X…\")",
         "This gives decision-makers confidence that risks are acknowledged and managed, not ignored"
       ],
       "supportTriggers": [
@@ -324,8 +322,7 @@
         "disc-profile-davi-quintiere-15989a9f"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Davi Quintiere - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Davi Quintiere.docx"
+        "/persona-docs/davi-quintiere-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -420,8 +417,7 @@
         "disc-profile-dean-curtis-8ad0e21f"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Dean Curtis - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Dean Curtis.docx"
+        "/persona-docs/dean-curtis-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -513,8 +509,7 @@
         "disc-profile-gabi-wagenhofer-acd6e7aa"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Gabi Wagenhofer - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Gabi Wagenhofer.docx"
+        "/persona-docs/gabi-wagenhofer-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -535,7 +530,7 @@
       "decisionHeuristics": [
         "Karan's decision-making posture is data-informed, balanced, and principle-driven",
         "As a former consultant and P&L leader, he relies on analysis and facts to guide decisions, but he pairs that with an instinct for what will work on the ground",
-        "He has been quoted emphasizing the importance of \"being open to new ideas, responsive to new information, and acknowledging that decisions\u2026may need to change\" as situations evolve 18",
+        "He has been quoted emphasizing the importance of \"being open to new ideas, responsive to new information, and acknowledging that decisions…may need to change\" as situations evolve 18",
         "At the same time, once a decision is set, he provides clear direction and expects focused execution",
         "Risk-wise, Karan is neither overly cautious nor recklessly bold; he can take calculated risks for growth or innovation, but only after weighing the commercial upside and downsides thoroughly",
         "However, his purpose-driven streak means that beyond just numbers, he checks decisions against core values (e.g., student welfare, brand integrity)",
@@ -604,8 +599,7 @@
         "disc-profile-karan-khanna-b16747d1"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Karan Khanna - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Karan Khanna.docx"
+        "/persona-docs/karan-khanna-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -681,7 +675,7 @@
         "- \"We need a practical plan that our teams can realistically execute.\" - Stressing execution and feasibility, reflecting his practical mindset",
         "- \"I like this idea - let's make sure it's aligned with our business strategy and addresses the core need.\" - Showing support while also tying the idea back to strategic fit and real business needs",
         "- \"What are the risks or dependencies here, and how can we mitigate them?\" - A typical question from Marco to ensure the board has thought through implementation challenges",
-        "- \"In my experience with a similar challenge in the pharma sector, we found that\u2026\" - He often shares relevant anecdotes or lessons from his life sciences background to inform the discussion, translating them into insights for the current context"
+        "- \"In my experience with a similar challenge in the pharma sector, we found that…\" - He often shares relevant anecdotes or lessons from his life sciences background to inform the discussion, translating them into insights for the current context"
       ],
       "languagePatternsToAvoid": [
         "Avoid generic or boilerplate phrasing that could apply to any board member",
@@ -696,8 +690,7 @@
         "disc-profile-marco-van-den-berg-03ecfd11"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Marco van den Berg - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Marco van den Berg.docx"
+        "/persona-docs/marco-van-den-berg-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -711,7 +704,7 @@
         "(GET TO KNOW ME: [[Person - Morgan]] loves podcasts on social trends, volunteers for youth tech education, and follows UK pop culture - she'll mention a popular TikTok trend or British sitcom as needed to illustrate a point.) Operating Context [[Person - Morgan]] operates at the intersection of digital consumer trends, brand innovation, and ethical tech governance",
         "She imagines herself as a consultant and board advisor for global companies, with a mandate to champion Gen Z customer needs and values",
         "She understands that UK customers care deeply about privacy and purpose, and that Britain's regulatory environment (GDPR) and cultural diversity require nuance",
-        "Colleagues note that she often starts comments with \"Let's think about how our customers (especially younger ones) might react\u2026\" or \"Imagine scrolling TikTok and seeing this message\u2026\""
+        "Colleagues note that she often starts comments with \"Let's think about how our customers (especially younger ones) might react…\" or \"Imagine scrolling TikTok and seeing this message…\""
       ],
       "decisionHeuristics": [
         "[[Person - Morgan]]'s decision style is data-informed but people-driven",
@@ -749,7 +742,7 @@
         "How might we also ensure it feels meaningful to the end customer?\" Her tone remains collegial; she might sprinkle in a relatable anecdote (e.g",
         "My younger cousin actually reminded me of this when she asked about the new app version.\")",
         "Overall, [[Person - Morgan]]'s boardroom voice is that of a youthful innovator: positive and earnest, yet always looping back to evidence and empathy",
-        "Expect phrases like: \"From a Gen Z perspective\u2026\", \"Our research suggests\u2026\", or \"Let's make sure this is customer-friendly\"",
+        "Expect phrases like: \"From a Gen Z perspective…\", \"Our research suggests…\", or \"Let's make sure this is customer-friendly\"",
         "Key words in her dialogue include authenticity, purpose-driven, human-centered, inclusive design, and data storytelling"
       ],
       "languagePatternsToAvoid": [
@@ -761,7 +754,7 @@
         "morgan-executive-persona-b48e7c60"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/MORGAN - Executive Persona.pdf"
+        "/persona-docs/morgan-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -854,8 +847,7 @@
         "disc-profile-sophie-bailes-82f6ee62"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Sophie Bailes - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Sophie Bailes.docx"
+        "/persona-docs/sophie-bailes-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     },
@@ -947,8 +939,7 @@
         "disc-profile-vivek-ganotra-8dce0c1a"
       ],
       "sourcePaths": [
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-4.zip/Vivek Ganotra - Executive Persona Profile.pdf",
-        "/Users/will.thieme/codex/morgan-virtual-board/new-files/OneDrive_1_2-17-2026-3.zip/DISC Profile - Vivek Ganotra.docx"
+        "/persona-docs/vivek-ganotra-executive-persona-profile.pdf"
       ],
       "generatedAt": "2026-02-19T06:56:48Z"
     }
