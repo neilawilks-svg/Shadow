@@ -3,8 +3,6 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 
 import type {
-  BoardMemberAgentProfile,
-  BoardMemberProfilePack,
   DocumentRecord,
   HandRaiseEvent,
   MeetingSession,
@@ -34,6 +32,33 @@ const DOCUMENTS_FILE = "documents.json";
 const BOARD_MEMBER_PROFILE_FILE = path.join(process.cwd(), "local", "board-vault", "agent-profiles.json");
 const BOARD_MEMBER_PROFILE_FALLBACK_FILE = path.join(process.cwd(), "data", "board-member-agent-profiles.json");
 const BOARD_MEMBER_PROFILE_SOURCE_DIR = path.join(process.cwd(), "local", "board-vault", "people");
+
+type BoardMemberAgentProfile = {
+  personaId: string;
+  name: string;
+  executiveSummary: string;
+  coreMotivations: string[];
+  decisionHeuristics: string[];
+  supportTriggers: string[];
+  challengeTriggers: string[];
+  riskBias: string;
+  discType: string;
+  discArchetype: string;
+  energizers: string[];
+  drainers: string[];
+  strengths: string[];
+  blindSpots: string[];
+  languagePatternsToUse: string[];
+  languagePatternsToAvoid: string[];
+  sourceDocIds: string[];
+  sourcePaths: string[];
+  generatedAt: string;
+};
+
+type BoardMemberProfilePack = {
+  generatedAt: string;
+  profiles: BoardMemberAgentProfile[];
+};
 
 declare global {
   var __runtimeTranscripts: Map<string, TranscriptSegment[]> | undefined;
