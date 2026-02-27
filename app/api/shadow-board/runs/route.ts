@@ -19,7 +19,7 @@ const schema = z.object({
   randomness: z.number().min(0).max(1).optional().default(0.2),
   meetingArtifacts: z.array(z.string()).max(24).optional().default([]),
   outputFormat: z.enum(["markdown", "plain_text"]).optional().default("markdown"),
-  targetWordCount: z.number().int().min(150).max(2000).optional().default(600),
+  targetWordCount: z.number().int().min(150).max(4000).optional().default(600),
   transcriptSeed: z.array(z.string()).max(60).optional().default([]),
 });
 

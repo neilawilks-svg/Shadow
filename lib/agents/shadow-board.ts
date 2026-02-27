@@ -911,7 +911,7 @@ function buildInitialRunRecord(input: RunInput): ShadowBoardRun {
     },
     meetingArtifacts: normalizeStringArray(input.meetingArtifacts, 40),
     outputFormat: input.outputFormat ?? "markdown",
-    targetWordCount: Math.max(150, Math.min(2000, input.targetWordCount ?? 600)),
+    targetWordCount: Math.max(150, Math.min(4000, input.targetWordCount ?? 600)),
     sharedTranscript: normalizeStringArray(input.transcriptSeed, 80),
     status: "running",
     startedAt: new Date().toISOString(),

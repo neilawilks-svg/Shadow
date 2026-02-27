@@ -688,7 +688,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                   <input
                     type="range"
                     min={150}
-                    max={2000}
+                    max={4000}
                     step={50}
                     value={targetWordCount}
                     onChange={(event) => setTargetWordCount(Number(event.target.value))}
