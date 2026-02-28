@@ -32,6 +32,9 @@ const DOCUMENTS_FILE = "documents.json";
 const BOARD_MEMBER_PROFILE_FILE = path.join(process.cwd(), "local", "board-vault", "agent-profiles.json");
 const BOARD_MEMBER_PROFILE_FALLBACK_FILE = path.join(process.cwd(), "data", "board-member-agent-profiles.json");
 const BOARD_MEMBER_PROFILE_SOURCE_DIR = path.join(process.cwd(), "local", "board-vault", "people");
+const BLOB_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN ?? "";
+const BLOB_BASE_URL = "https://blob.vercel-storage.com";
+const SHADOW_STATE_PREFIX = "state/shadow-board";
 
 type BoardMemberAgentProfile = {
   personaId: string;
@@ -66,6 +69,73 @@ declare global {
 
 const runtimeTranscripts = globalThis.__runtimeTranscripts ?? new Map<string, TranscriptSegment[]>();
 globalThis.__runtimeTranscripts = runtimeTranscripts;
+
+function shouldUseShadowBlobState(): boolean {
+  return Boolean(BLOB_WRITE_TOKEN);
+}
+
+function buildShadowBlobUrl(fileName: string, write = false): string {
+  const base = `${BLOB_BASE_URL}/${SHADOW_STATE_PREFIX}/${fileName}`;
+  if (!write) {
+    return base;
+  }
+  return `${base}?access=private&addRandomSuffix=0`;
+}
+
+async function readShadowStateJson<T>(fileName: string, fallback: T): Promise<T> {
+  if (!shouldUseShadowBlobState()) {
+    return readJsonFile<T>(fileName, fallback);
+  }
+
+  try {
+    const response = await fetch(buildShadowBlobUrl(fileName), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
+      },
+      cache: "no-store",
+    });
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
+    if (response.status !== 404) {
+      return readJsonFile<T>(fileName, fallback);
+    }
+  } catch {
+    return readJsonFile<T>(fileName, fallback);
+  }
+
+  return readJsonFile<T>(fileName, fallback);
+}
+
+async function writeShadowStateJson<T>(fileName: string, value: T): Promise<void> {
+  let blobWriteSucceeded = false;
+
+  if (shouldUseShadowBlobState()) {
+    try {
+      const response = await fetch(buildShadowBlobUrl(fileName, true), {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: `${JSON.stringify(value, null, 2)}\n`,
+      });
+      blobWriteSucceeded = response.ok;
+    } catch {
+      blobWriteSucceeded = false;
+    }
+  }
+
+  try {
+    await writeJsonFile(fileName, value);
+    return;
+  } catch {
+    if (!blobWriteSucceeded) {
+      throw new Error(`Unable to persist ${fileName} to blob or file store.`);
+    }
+  }
+}
 
 function normalizePersonaRole(role: unknown): PersonaProfile["role"] {
   return role === "slalom_facilitator" ? "slalom_facilitator" : "board_member";
@@ -302,35 +372,45 @@ export async function updateInterviewSession(updated: PersonaInterviewSession): 
 }
 
 export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
-  const runs = await readJsonFile<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
+  const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
   runs.unshift(run);
-  await writeJsonFile(SHADOW_BOARD_FILE, runs);
+  await writeShadowStateJson(SHADOW_BOARD_FILE, runs);
 }
 
 export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
-  const runs = await readJsonFile<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
-  const next = runs.map((item) => (item.runId === run.runId ? run : item));
-  await writeJsonFile(SHADOW_BOARD_FILE, next);
+  const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
+  let found = false;
+  const next = runs.map((item) => {
+    if (item.runId === run.runId) {
+      found = true;
+      return run;
+    }
+    return item;
+  });
+  if (!found) {
+    next.unshift(run);
+  }
+  await writeShadowStateJson(SHADOW_BOARD_FILE, next);
 }
 
 export async function getShadowBoardRun(runId: string): Promise<ShadowBoardRun | undefined> {
-  const runs = await readJsonFile<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
+  const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
   return runs.find((run) => run.runId === runId);
 }
 
 export async function listShadowBoardRuns(limit = 100): Promise<ShadowBoardRun[]> {
-  const runs = await readJsonFile<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
+  const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
   return runs.slice(0, Math.max(1, limit));
 }
 
 export async function appendShadowBoardRunEvent(event: ShadowBoardRunEvent): Promise<void> {
-  const events = await readJsonFile<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
+  const events = await readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
   events.push(event);
-  await writeJsonFile(SHADOW_BOARD_EVENTS_FILE, events.slice(-5000));
+  await writeShadowStateJson(SHADOW_BOARD_EVENTS_FILE, events.slice(-5000));
 }
 
 export async function getShadowBoardRunEvents(runId: string, limit = 500): Promise<ShadowBoardRunEvent[]> {
-  const events = await readJsonFile<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
+  const events = await readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
   const filtered = events.filter((event) => event.runId === runId);
   if (filtered.length <= limit) {
     return filtered;
