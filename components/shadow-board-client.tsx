@@ -414,6 +414,14 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     return true;
   }, []);
 
+  const fetchRunById = useCallback(async (runId: string): Promise<RunResult | null> => {
+    const response = await fetch(`/api/shadow-board/runs/${runId}`);
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as RunResult;
+  }, []);
+
   const manualGenerateReport = useCallback(async () => {
     setError(null);
     const runId = runResult?.runId ?? runs[0]?.runId;
@@ -618,6 +626,36 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
     return () => clearTimeout(timer);
   }, [refreshDocuments, refreshRuns, refreshSessions]);
+
+  useEffect(() => {
+    if (!runResult?.runId || status !== "running") {
+      return;
+    }
+
+    const runId = runResult.runId;
+    const interval = window.setInterval(() => {
+      void (async () => {
+        const latest = await fetchRunById(runId);
+        if (!latest) {
+          return;
+        }
+        setRunResult(latest);
+        setStatus(latest.status);
+        if (Array.isArray(latest.warnings)) {
+          setRunWarnings(latest.warnings);
+        }
+        if (latest.status === "completed" || latest.status === "failed") {
+          void fetchReport(runId);
+          void refreshRuns();
+          closeShadowStream();
+        }
+      })();
+    }, 2500);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [closeShadowStream, fetchReport, fetchRunById, refreshRuns, runResult?.runId, status]);
 
   useEffect(() => {
     return () => {

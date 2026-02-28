@@ -1319,9 +1319,7 @@ function buildInitialRunRecord(input: RunInput): ShadowBoardRun {
 }
 
 function scheduleShadowRun(task: () => Promise<void>): void {
-  setTimeout(() => {
-    void task();
-  }, 0);
+  void task();
 }
 
 async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput): Promise<ShadowBoardRun> {
