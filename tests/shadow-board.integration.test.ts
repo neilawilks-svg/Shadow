@@ -82,6 +82,23 @@ describe("shadow board integration", () => {
       const firstComments = run.outputs.map((output) => output.comment.trim());
       const uniqueComments = new Set(firstComments);
       expect(uniqueComments.size).toBeGreaterThanOrEqual(4);
+
+      for (const output of run.outputs) {
+        expect(output.comment).toContain("Position:");
+        expect(output.comment).toContain("Insight:");
+        expect(output.comment).toContain("Advice:");
+        expect(output.comment).toContain("Question:");
+        expect(output.position).toBeTruthy();
+        expect((output.insights ?? []).length).toBeGreaterThanOrEqual(2);
+        expect((output.advice ?? []).length).toBeGreaterThanOrEqual(1);
+        expect((output.questions ?? []).length).toBeGreaterThanOrEqual(1);
+      }
+
+      const transcript = (run.sharedTranscript ?? []).join("\n");
+      expect(transcript).toContain("Position:");
+      expect(transcript).toContain("Insight:");
+      expect(transcript).toContain("Advice:");
+      expect(transcript).toContain("Question:");
     } finally {
       if (hadOriginal) {
         await fs.rename(backupPath, profilePath);

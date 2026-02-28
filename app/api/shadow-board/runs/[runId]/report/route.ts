@@ -49,13 +49,16 @@ function toTranscriptBullets(lines: string[]): string[] {
     if (match) {
       const turnNumber = match[1];
       const body = match[2] ?? "";
-      const speakerMatch = body.match(/^([^:]+):\s*(.*)$/);
-      if (speakerMatch) {
-        const speaker = speakerMatch[1]?.trim() ?? "Speaker";
-        const text = speakerMatch[2]?.trim() ?? "";
-        return `- **Turn ${turnNumber} - ${speaker}:** ${text}`;
+      const linesInTurn = body.split(/\r?\n/);
+      const speakerMatch = linesInTurn[0]?.match(/^([^:]+):\s*(.*)$/);
+      if (!speakerMatch) {
+        return `- **Turn ${turnNumber}:** ${body.replace(/\r?\n/g, " ")}`;
       }
-      return `- **Turn ${turnNumber}:** ${body}`;
+      const speaker = speakerMatch[1]?.trim() ?? "Speaker";
+      const firstLine = speakerMatch[2]?.trim() ?? "";
+      const detailLines = linesInTurn.slice(1).map((item) => item.trim()).filter(Boolean);
+      const details = detailLines.length > 0 ? `\n  ${detailLines.join("\n  ")}` : "";
+      return `- **Turn ${turnNumber} - ${speaker}:** ${firstLine}${details}`;
     }
 
     const fallbackSpeaker = cleaned.match(/^([^:]+):\s*(.*)$/);

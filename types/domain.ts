@@ -194,6 +194,11 @@ export interface PersonaDebateOutput {
   personaName: string;
   comment: string;
   comments: string[];
+  position?: string;
+  insights?: string[];
+  advice?: string[];
+  questions?: string[];
+  interactionModes?: Array<"build" | "challenge" | "bridge" | "quantify" | "operationalise" | "scenario">;
   viewpoint: string;
   thinkingSteps: string[];
   risks: string[];

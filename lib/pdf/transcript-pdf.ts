@@ -145,6 +145,9 @@ function buildPdfDocument(pageStreams: string[]): Uint8Array {
 
 export function generateTranscriptPdf(input: TranscriptPdfInput): Uint8Array {
   const generatedAt = input.generatedAtIso ?? new Date().toISOString();
+  const transcriptLines = input.transcriptLines.length
+    ? input.transcriptLines.flatMap((entry) => entry.split(/\r?\n/))
+    : ["No transcript lines available."];
   const baseLines: string[] = [
     "Shadow Board Transcript Export",
     "",
@@ -158,7 +161,7 @@ export function generateTranscriptPdf(input: TranscriptPdfInput): Uint8Array {
     ...(input.topics.length > 0 ? input.topics.map((topic) => `- ${topic}`) : ["- n/a"]),
     "",
     "Full Transcript",
-    ...(input.transcriptLines.length > 0 ? input.transcriptLines : ["No transcript lines available."]),
+    ...transcriptLines,
   ];
 
   const pageStreams = buildPageStreams(baseLines);

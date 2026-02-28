@@ -7,6 +7,13 @@ import { ensureLocalRagMcpConnected } from "@/lib/agents/mcp-rag";
 import { getOrCreateShadowMemberAgent } from "@/lib/agents/member-agent-registry";
 import { PROHIBITED_GENERIC_PHRASES } from "@/lib/agents/persona-prompt-builder";
 import { clampNumber, normalizeShadowBoardControls } from "@/lib/agents/shadow-controls";
+import {
+  buildDeterministicStructuredFallback,
+  formatStructuredTurn,
+  type InteractionMode,
+  type StructuredTurnCandidate,
+  validateTurn,
+} from "@/lib/agents/shadow-turn-contract";
 import { selectNextSpeakerBid } from "@/lib/agents/turn-selector";
 import { createAgentRunner } from "@/lib/agents/runtime";
 import { config } from "@/lib/config";
@@ -54,6 +61,11 @@ interface PersonaTurn {
   personaId: string;
   personaName: string;
   comment: string;
+  position: string;
+  insights: string[];
+  advice: string[];
+  questions: string[];
+  interactionModes: InteractionMode[];
   thinkingStep: string;
   risk: string;
   recommendation: string;
@@ -77,6 +89,12 @@ interface ConsensusSynthesis {
 
 interface MemberResponse {
   comment: string;
+  position: string;
+  insights: string[];
+  advice: string[];
+  questions: string[];
+  interactionModes: InteractionMode[];
+  experienceReference?: string;
   reason: string;
   confidence: number;
   citations: string[];
@@ -173,6 +191,35 @@ function getTopicForTurn(topics: string[], turnIndex: number): string {
   return topics[turnIndex % topics.length] ?? topics[0] ?? "the proposal";
 }
 
+function shouldApplyAiDepthGuidance(agenda: string, topics: string[]): boolean {
+  const text = `${agenda}\n${topics.join("\n")}`.toLowerCase();
+  return [
+    "ai",
+    "model",
+    "accuracy",
+    "accountability",
+    "assurance",
+    "liability",
+    "go-to-market",
+    "pricing",
+  ].some((token) => text.includes(token));
+}
+
+function buildAiDepthGuidance(agenda: string, topics: string[]): string {
+  if (!shouldApplyAiDepthGuidance(agenda, topics)) {
+    return "";
+  }
+  return [
+    "Agenda depth guidance for AI/accountability discussions:",
+    "- Distinguish business KPI accuracy from model metric accuracy thresholds.",
+    "- Address data quality, lineage, drift monitoring, and intervention triggers.",
+    "- Specify human-in-the-loop review and escalation paths.",
+    "- Cover liability and client contract implications.",
+    "- Clarify packaging/pricing/governance for AI-enabled offerings.",
+    "- Propose at least one pilot Slalom UK & Ireland can run in the next 2-4 weeks.",
+  ].join("\n");
+}
+
 function selectPersonaArtifacts(persona: PersonaProfile, artifacts: string[]): string[] {
   if (artifacts.length === 0) {
     return [];
@@ -219,18 +266,62 @@ function buildPersonaChallengeQuestion(persona: PersonaProfile, topic: string): 
     return `${persona.name}: What would falsify our assumptions on ${topic}?`;
   }
   if (persona.consensusRole === "driver") {
-    return `${persona.name}: What decision can we lock now on ${topic} with a named owner and date?`;
+    return `${persona.name}: What recommendation on ${topic} can we pressure-test now with a named owner and date?`;
   }
   return `${persona.name}: Where is the best speed-control balance on ${topic} for this phase?`;
 }
 
 function buildPersonaOutput(persona: PersonaProfile, turns: PersonaTurn[]): PersonaDebateOutput {
+  if (turns.length === 0) {
+    const fallbackPosition = `${persona.name} has no recorded turn yet and recommends holding until additional evidence is surfaced.`;
+    const fallbackInsights = [
+      "Current transcript context is insufficient to add a differentiated recommendation without repeating prior statements.",
+      "A targeted follow-up should focus on evidence quality, risk boundaries, and measurable execution criteria.",
+    ];
+    const fallbackAdvice = [
+      "Invite one focused follow-up contribution once new data or dissenting evidence is available.",
+    ];
+    const fallbackQuestions = [
+      "Which unresolved assumption should this member challenge first in the next turn?",
+    ];
+    const fallbackComment = buildStructuredComment({
+      personaName: persona.name,
+      position: fallbackPosition,
+      insights: fallbackInsights,
+      advice: fallbackAdvice,
+      questions: fallbackQuestions,
+    });
+
+    return {
+      personaId: persona.id,
+      personaName: persona.name,
+      comment: fallbackComment,
+      comments: [fallbackComment],
+      position: fallbackPosition,
+      insights: fallbackInsights,
+      advice: fallbackAdvice,
+      questions: fallbackQuestions,
+      interactionModes: ["build", "challenge"],
+      viewpoint: `${persona.name} contributes a ${persona.lens.toLowerCase()} perspective with ${persona.decisionStyle.toLowerCase()}.`,
+      thinkingSteps: ["No speaking turn committed yet; awaiting additional evidence."],
+      risks: ["Potential signal loss if this perspective is never heard in the run."],
+      recommendations: ["Queue a targeted follow-up turn with explicit evidence anchors."],
+      challengeQuestions: fallbackQuestions,
+      confidence: 0.45,
+    };
+  }
+
   const comments = turns.map((turn) => turn.comment).slice(0, 6);
   return {
     personaId: persona.id,
     personaName: persona.name,
     comment: comments[0] ?? `${persona.name}: No contribution recorded.`,
     comments,
+    position: turns[0]?.position,
+    insights: turns.flatMap((turn) => turn.insights).slice(0, 8),
+    advice: turns.flatMap((turn) => turn.advice).slice(0, 6),
+    questions: turns.flatMap((turn) => turn.questions).slice(0, 6),
+    interactionModes: Array.from(new Set(turns.flatMap((turn) => turn.interactionModes))).slice(0, 6),
     viewpoint: `${persona.name} contributes a ${persona.lens.toLowerCase()} perspective with ${persona.decisionStyle.toLowerCase()}.`,
     thinkingSteps: turns.map((turn) => turn.thinkingStep).filter(Boolean).slice(0, 6),
     risks: turns.map((turn) => turn.risk).filter(Boolean).slice(0, 6),
@@ -282,7 +373,7 @@ function fallbackRecommendations(outputs: PersonaDebateOutput[]): ShadowBoardRec
     {
       theme: "Decision closure",
       recommendation:
-        "Approve a time-boxed pilot with one executive owner, dated checkpoint, and explicit success criteria.",
+        "Recommend a time-boxed pilot with one executive owner, dated checkpoint, and explicit success criteria.",
       rationale: "The board converges faster when owner and checkpoint obligations are explicit.",
       risks: ["Unclear accountability", "scope drift before evidence"],
       counterpoints: ["Over-specification can slow experimentation."],
@@ -363,30 +454,33 @@ function buildProfileDerivedComment(params: {
   persona: PersonaProfile;
   profile: BoardMemberAgentProfile;
   topic: string;
+  agenda: string;
   turnIndex: number;
 }): MemberResponse {
-  const seedA =
-    params.profile.coreMotivations[params.turnIndex % Math.max(1, params.profile.coreMotivations.length)] ??
-    `${params.persona.name} prioritizes measurable outcomes.`;
-  const seedB =
-    params.profile.decisionHeuristics[params.turnIndex % Math.max(1, params.profile.decisionHeuristics.length)] ??
-    `${params.persona.name} wants explicit decision criteria.`;
-  const seedC =
-    params.profile.challengeTriggers[params.turnIndex % Math.max(1, params.profile.challengeTriggers.length)] ??
-    `${params.persona.name} challenges weak risk ownership.`;
+  const fallback = buildDeterministicStructuredFallback({
+    persona: params.persona,
+    topic: params.topic,
+    agenda: params.agenda,
+    reason: `${params.persona.name} provided a deterministic fallback turn.`,
+  });
 
-  const body = [
-    `${toSentence(seedA)} ${params.persona.name} applies this directly to ${params.topic}.`,
-    `${toSentence(seedB)} The room should define owner, timeline, and checkpoint criteria before scale-up.`,
-    `${toSentence(seedC)}`,
-  ]
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const body = formatStructuredTurn({
+    personaName: params.persona.name,
+    position: fallback.position,
+    insights: fallback.insights,
+    advice: fallback.advice,
+    questions: fallback.questions,
+  });
 
   return {
-    comment: `${params.persona.name}: ${body}`,
-    reason: `${params.persona.name} provided a profile-grounded contribution for ${params.topic}.`,
+    comment: body,
+    position: fallback.position,
+    insights: fallback.insights,
+    advice: fallback.advice,
+    questions: fallback.questions,
+    interactionModes: ["quantify", "operationalise", "challenge"],
+    experienceReference: fallback.experienceReference,
+    reason: `${params.persona.name} provided a profile-grounded contribution for ${params.topic} using ${params.profile.discArchetype || "board"} cues.`,
     confidence: 0.56,
     citations: [],
   };
@@ -427,6 +521,7 @@ function normalizeBid(params: {
     proposedComment?: string;
     comment?: string;
     reason?: string;
+    interactionModes?: string[];
     confidence?: number;
     citations?: string[];
   };
@@ -443,9 +538,13 @@ function normalizeBid(params: {
     (typeof candidate.comment === "string" && candidate.comment.trim()) ||
     fallback.proposedComment;
 
+  const interactionModes = normalizeStringArray(candidate.interactionModes, 6);
+  const urgencyBoost = Math.min(2, interactionModes.length);
   return {
     personaId: params.persona.id,
-    urgency_1_to_10: Math.round(clampNumber(candidate.urgency_1_to_10 ?? candidate.urgency ?? fallback.urgency_1_to_10, 1, 10)),
+    urgency_1_to_10: Math.round(
+      clampNumber((candidate.urgency_1_to_10 ?? candidate.urgency ?? fallback.urgency_1_to_10) + urgencyBoost, 1, 10),
+    ),
     shouldSpeak: typeof candidate.shouldSpeak === "boolean" ? candidate.shouldSpeak : true,
     proposedComment: firstSentence(thesis) || fallback.proposedComment,
     reason:
@@ -457,12 +556,28 @@ function normalizeBid(params: {
   };
 }
 
-function normalizeSpeakerComment(persona: PersonaProfile, rawComment: string): string {
-  const body = stripSpeakerPrefix(rawComment, persona.name).replace(/\s+/g, " ").trim();
-  if (!body) {
-    return `${persona.name}: ${persona.name} requests clearer evidence before commitment.`;
+function buildStructuredComment(params: {
+  personaName: string;
+  position: string;
+  insights: string[];
+  advice: string[];
+  questions: string[];
+}): string {
+  return formatStructuredTurn({
+    personaName: params.personaName,
+    position: params.position,
+    insights: params.insights,
+    advice: params.advice,
+    questions: params.questions,
+  });
+}
+
+function toTurnTranscriptBlock(turnNumber: number, comment: string): string {
+  const lines = comment.split(/\r?\n/);
+  if (lines.length === 0) {
+    return `[Turn ${turnNumber}]`;
   }
-  return `${persona.name}: ${body}`;
+  return [`[Turn ${turnNumber}] ${lines[0]}`, ...lines.slice(1)].join("\n");
 }
 
 async function rebuildMemberAgentProfiles(force: boolean): Promise<boolean> {
@@ -629,9 +744,11 @@ async function generatePersonaBid(params: {
           "Task:",
           "1) Review the full transcript and evidence.",
           "2) Decide if you should speak next.",
-          "3) Return urgency, rationale, and one concise thesis for what you would add.",
+          "3) Return urgency, rationale, one concise thesis, and intended interactionModes.",
+          "4) InteractionModes must include at least two items from: build, challenge, bridge, quantify, operationalise, scenario.",
           "Topics:",
           params.topics.map((topic) => `- ${topic}`).join("\n"),
+          buildAiDepthGuidance(params.agenda, params.topics),
           "Evidence:",
           params.artifacts.length > 0 ? params.artifacts.map((item) => `- ${item}`).join("\n") : "- none",
           "Persona-priority evidence:",
@@ -641,7 +758,7 @@ async function generatePersonaBid(params: {
           "Recent transcript:",
           params.transcript.slice(-60).map((line) => `- ${line}`).join("\n"),
           "Return JSON only with schema:",
-          '{"personaId":"string","urgency_1_to_10":1,"shouldSpeak":true,"proposedComment":"string","reason":"string","confidence":0.0,"citations":["string"]}',
+          '{"personaId":"string","urgency_1_to_10":1,"shouldSpeak":true,"proposedComment":"string","interactionModes":["build"],"reason":"string","confidence":0.0,"citations":["string"]}',
         ].join("\n\n"),
         {
           maxTurns: 6,
@@ -688,6 +805,7 @@ async function runPersonaCommentAttempt(params: {
   randomness: number;
   selectedBid?: BoardTurnBid;
   forceNovelty: boolean;
+  validationFeedback?: string;
 }): Promise<MemberResponse | null> {
   if (!hasOpenAiKey()) {
     return null;
@@ -722,8 +840,21 @@ async function runPersonaCommentAttempt(params: {
             ? `Selected to speak because: ${params.selectedBid.reason} (urgency ${params.selectedBid.urgency_1_to_10}/10)`
             : "You are the opening speaker for this run.",
           noveltyGuard,
+          "Role and objective:",
+          "- You are simulating Slalom UK & Ireland advisory-board dialogue.",
+          "- Keep persona consistency, but focus 80-90% of output on agenda substance.",
+          "- Do not use decision language unless explicitly asked for a decision.",
+          "Turn structure (mandatory):",
+          "- position: exactly 1 sentence",
+          "- insights: 2-5 bullets",
+          "- advice: 1-3 bullets",
+          "- questions: 1-2 bullets",
+          "- interactionModes: at least two from build, challenge, bridge, quantify, operationalise, scenario",
+          "- experienceReference optional and max one sentence",
+          params.validationFeedback ? `Validation feedback from prior draft:\n${params.validationFeedback}` : "",
           "Topics:",
           params.topics.map((topic) => `- ${topic}`).join("\n"),
+          buildAiDepthGuidance(params.agenda, params.topics),
           "Evidence:",
           params.artifacts.length > 0 ? params.artifacts.map((item) => `- ${item}`).join("\n") : "- none",
           "Persona-priority evidence:",
@@ -733,7 +864,7 @@ async function runPersonaCommentAttempt(params: {
           "Recent transcript:",
           params.transcript.slice(-80).map((line) => `- ${line}`).join("\n"),
           "Return JSON only with schema:",
-          '{"proposedComment":"string","reason":"string","confidence":0.0,"citations":["string"]}',
+          '{"position":"string","insights":["string"],"advice":["string"],"questions":["string"],"interactionModes":["build"],"experienceReference":"string","reason":"string","confidence":0.0,"citations":["string"]}',
         ].join("\n\n"),
         {
           maxTurns: 8,
@@ -745,29 +876,61 @@ async function runPersonaCommentAttempt(params: {
 
     const raw = typeof response.finalOutput === "string" ? response.finalOutput : JSON.stringify(response.finalOutput ?? {});
     const parsed = parseJsonFromText<{
-      proposedComment?: string;
-      comment?: string;
+      position?: string;
+      insights?: string[];
+      advice?: string[];
+      questions?: string[];
+      interactionModes?: string[];
+      experienceReference?: string;
       reason?: string;
       confidence?: number;
       citations?: string[];
     }>(raw);
 
-    const rawComment =
-      (typeof parsed?.proposedComment === "string" && parsed.proposedComment.trim()) ||
-      (typeof parsed?.comment === "string" && parsed.comment.trim()) ||
-      "";
+    if (!parsed) {
+      return null;
+    }
 
-    if (!rawComment) {
+    const candidate: StructuredTurnCandidate = {
+      position: typeof parsed.position === "string" ? parsed.position : "",
+      insights: Array.isArray(parsed.insights) ? parsed.insights : [],
+      advice: Array.isArray(parsed.advice) ? parsed.advice : [],
+      questions: Array.isArray(parsed.questions) ? parsed.questions : [],
+      interactionModes: Array.isArray(parsed.interactionModes) ? parsed.interactionModes : [],
+      experienceReference: typeof parsed.experienceReference === "string" ? parsed.experienceReference : undefined,
+      reason: typeof parsed.reason === "string" ? parsed.reason : undefined,
+      confidence: parsed.confidence,
+      citations: Array.isArray(parsed.citations) ? parsed.citations : [],
+    };
+
+    const position = toSentence(candidate.position ?? "");
+    const insights = normalizeStringArray(candidate.insights, 5);
+    const advice = normalizeStringArray(candidate.advice, 3);
+    const questions = normalizeStringArray(candidate.questions, 2);
+    const interactionModes = normalizeStringArray(candidate.interactionModes, 6).map((item) => item.toLowerCase());
+    if (!position || insights.length === 0 || advice.length === 0 || questions.length === 0) {
       return null;
     }
 
     return {
-      comment: normalizeSpeakerComment(params.persona, rawComment),
+      comment: buildStructuredComment({
+        personaName: params.persona.name,
+        position,
+        insights,
+        advice,
+        questions,
+      }),
+      position,
+      insights,
+      advice,
+      questions,
+      interactionModes: interactionModes as InteractionMode[],
+      experienceReference: candidate.experienceReference,
       reason:
-        (typeof parsed?.reason === "string" && parsed.reason.trim()) ||
+        (typeof candidate.reason === "string" && candidate.reason.trim()) ||
         `${params.persona.name} provided a perspective on ${params.topic}.`,
-      confidence: clampNumber(parsed?.confidence ?? 0.72, 0, 1),
-      citations: normalizeStringArray(parsed?.citations, 10),
+      confidence: clampNumber(candidate.confidence ?? 0.72, 0, 1),
+      citations: normalizeStringArray(candidate.citations, 10),
     };
   } catch {
     return null;
@@ -795,6 +958,7 @@ async function generatePersonaComment(params: {
   const generated = await runPersonaCommentAttempt({
     ...params,
     forceNovelty: false,
+    validationFeedback: undefined,
   });
 
   if (!generated) {
@@ -802,11 +966,30 @@ async function generatePersonaComment(params: {
       persona: params.persona,
       profile: params.profile,
       topic: params.topic,
+      agenda: params.agenda,
       turnIndex: params.turnIndex,
     });
   }
 
+  const firstValidation = validateTurn(
+    {
+      position: generated.position,
+      insights: generated.insights,
+      advice: generated.advice,
+      questions: generated.questions,
+      interactionModes: generated.interactionModes,
+      experienceReference: generated.experienceReference,
+    },
+    {
+      persona: params.persona,
+      agenda: params.agenda,
+      topic: params.topic,
+      transcript: params.transcript,
+    },
+  );
+
   if (
+    firstValidation.valid &&
     !isCommentTooSimilar({
       comment: generated.comment,
       persona: params.persona,
@@ -817,13 +1000,38 @@ async function generatePersonaComment(params: {
     return generated;
   }
 
+  const feedback = firstValidation.valid
+    ? "Prior draft was overly similar to transcript. Keep structure and add new specific insights."
+    : `Fix these violations:\n- ${firstValidation.violations.join("\n- ")}`;
+
   const regenerated = await runPersonaCommentAttempt({
     ...params,
     forceNovelty: true,
+    validationFeedback: feedback,
   });
+
+  const secondValidation = regenerated
+    ? validateTurn(
+        {
+          position: regenerated.position,
+          insights: regenerated.insights,
+          advice: regenerated.advice,
+          questions: regenerated.questions,
+          interactionModes: regenerated.interactionModes,
+          experienceReference: regenerated.experienceReference,
+        },
+        {
+          persona: params.persona,
+          agenda: params.agenda,
+          topic: params.topic,
+          transcript: params.transcript,
+        },
+      )
+    : null;
 
   if (
     regenerated &&
+    secondValidation?.valid &&
     !isCommentTooSimilar({
       comment: regenerated.comment,
       persona: params.persona,
@@ -834,10 +1042,45 @@ async function generatePersonaComment(params: {
     return regenerated;
   }
 
-  const fallback = regenerated ?? generated;
+  const fallbackStructured = buildDeterministicStructuredFallback({
+    persona: params.persona,
+    topic: params.topic,
+    agenda: params.agenda,
+    reason: `${params.persona.name} fallback due to validation or novelty constraints.`,
+  });
+
+  const fallback: MemberResponse = {
+    comment: buildStructuredComment({
+      personaName: params.persona.name,
+      position: fallbackStructured.position,
+      insights: fallbackStructured.insights,
+      advice: fallbackStructured.advice,
+      questions: fallbackStructured.questions,
+    }),
+    position: fallbackStructured.position,
+    insights: fallbackStructured.insights,
+    advice: fallbackStructured.advice,
+    questions: fallbackStructured.questions,
+    interactionModes: ["quantify", "operationalise", "challenge"],
+    experienceReference: fallbackStructured.experienceReference,
+    reason: fallbackStructured.reason ?? `${params.persona.name} fallback turn`,
+    confidence: fallbackStructured.confidence ?? 0.55,
+    citations: fallbackStructured.citations ?? [],
+  };
+
+  const violationMessages = [
+    ...(!firstValidation.valid ? firstValidation.violations : []),
+    ...(secondValidation && !secondValidation.valid ? secondValidation.violations : []),
+  ];
+
   return {
     ...fallback,
-    repetitionWarning: `${params.persona.name} produced high-overlap wording; turn kept with novelty warning.`,
+    repetitionWarning:
+      violationMessages.length > 0
+        ? `${params.persona.name} turn required deterministic fallback after policy checks: ${Array.from(
+            new Set(violationMessages),
+          ).join(" | ")}`
+        : `${params.persona.name} produced high-overlap wording; deterministic fallback applied.`,
   };
 }
 
@@ -865,7 +1108,7 @@ async function synthesizeConsensus(params: {
       workflowName: "shadow_board_consensus",
       groupId: params.runId,
       systemPrompt:
-        "Synthesize board consensus and dissent. Keep recommendations concrete with ownership and checkpoints. Return JSON only.",
+        "Synthesize board consensus and dissent for an advisory-board discussion. Keep recommendations concrete with ownership and checkpoints, but avoid decision decrees. Return JSON only.",
       userPrompt: [
         `Agenda: ${params.agenda}`,
         `Topics: ${params.topics.join("; ")}`,
@@ -1066,7 +1309,8 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       personaTurnHistory: [],
     });
 
-    const openingLine = `[Turn 1] ${normalizeSpeakerComment(opener, openingResponse.comment)}`;
+    const openingComment = openingResponse.comment;
+    const openingLine = toTurnTranscriptBlock(1, openingComment);
     sharedTranscript.push(openingLine);
     if (sharedTranscript.length > MAX_TRANSCRIPT_LINES) {
       sharedTranscript.splice(0, sharedTranscript.length - MAX_TRANSCRIPT_LINES);
@@ -1075,10 +1319,15 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
     const openingTurn: PersonaTurn = {
       personaId: opener.id,
       personaName: opener.name,
-      comment: normalizeSpeakerComment(opener, openingResponse.comment),
+      comment: openingComment,
+      position: openingResponse.position,
+      insights: openingResponse.insights,
+      advice: openingResponse.advice,
+      questions: openingResponse.questions,
+      interactionModes: openingResponse.interactionModes,
       thinkingStep: toSentence(openingResponse.reason),
       risk: buildPersonaRiskLine(opener, openingTopic, openingResponse.reason),
-      recommendation: buildPersonaRecommendation(opener, openingTopic, openingResponse.comment),
+      recommendation: buildPersonaRecommendation(opener, openingTopic, openingComment),
       challengeQuestion: buildPersonaChallengeQuestion(opener, openingTopic),
       confidence: openingResponse.confidence,
       round: 1,
@@ -1092,7 +1341,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       personaId: opener.id,
       urgency_1_to_10: 10,
       shouldSpeak: true,
-      proposedComment: firstSentence(openingResponse.comment) || `${opener.name} opens the meeting.`,
+      proposedComment: firstSentence(openingResponse.position) || `${opener.name} opens the meeting.`,
       reason: openingResponse.reason,
       confidence: openingResponse.confidence,
       citations: openingResponse.citations,
@@ -1210,13 +1459,18 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
         personaTurnHistory: priorSpeakerTurns,
       });
 
-      const normalizedComment = normalizeSpeakerComment(speaker, response.comment);
-      const transcriptLine = `[Turn ${turnIndex + 1}] ${normalizedComment}`;
+      const normalizedComment = response.comment;
+      const transcriptLine = toTurnTranscriptBlock(turnIndex + 1, normalizedComment);
 
       const turn: PersonaTurn = {
         personaId: speaker.id,
         personaName: speaker.name,
         comment: normalizedComment,
+        position: response.position,
+        insights: response.insights,
+        advice: response.advice,
+        questions: response.questions,
+        interactionModes: response.interactionModes,
         thinkingStep: toSentence(response.reason),
         risk: buildPersonaRiskLine(speaker, topic, response.reason),
         recommendation: buildPersonaRecommendation(speaker, topic, normalizedComment),

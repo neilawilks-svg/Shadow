@@ -57,6 +57,10 @@ describe("persona prompt builder", () => {
     expect(prompt).toContain("DISC type: D");
     expect(prompt).toContain("DISC archetype: Captain");
     expect(prompt).toContain("Do not imitate style from other members");
+    expect(prompt).toContain("advisory board simulation for Slalom UK & Ireland");
+    expect(prompt).toContain("position (1 sentence), insights (2-5 bullets), advice (1-3 bullets), questions (1-2 bullets)");
+    expect(prompt).toContain("interactionModes");
+    expect(prompt).toContain("Do not include long lists of employers");
   });
 
   it("produces different prompts for different board members", () => {

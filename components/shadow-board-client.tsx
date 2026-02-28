@@ -158,7 +158,9 @@ function renderMarkdownReport(markdown: string): ReactNode[] {
       blocks.push(
         <ul key={`ul-${key++}`} className="list-disc space-y-1 pl-5 text-sm text-[color:var(--ink-2)]">
           {items.map((item, itemIndex) => (
-            <li key={`li-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+            <li key={`li-${itemIndex}`} className="whitespace-pre-wrap">
+              {renderInlineMarkdown(item)}
+            </li>
           ))}
         </ul>,
       );
@@ -925,7 +927,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                       <p>No transcript lines yet.</p>
                     ) : (
                       (runResult.sharedTranscript ?? []).map((line, index) => (
-                        <p key={`${index}-${line.slice(0, 14)}`}>{line}</p>
+                        <p key={`${index}-${line.slice(0, 14)}`} className="whitespace-pre-wrap">
+                          {line}
+                        </p>
                       ))
                     )}
                   </div>
