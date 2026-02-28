@@ -1769,13 +1769,30 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
         turnIndex,
       });
 
-      if (!selectedBid) {
+      let speaker = selectedBid
+        ? speakingPersonas.find((persona) => persona.id === selectedBid.personaId)
+        : undefined;
+
+      if (!speaker) {
+        speaker = [...speakingPersonas]
+          .sort((a, b) => {
+            const byTurns = (turnCounts.get(a.id) ?? 0) - (turnCounts.get(b.id) ?? 0);
+            if (byTurns !== 0) {
+              return byTurns;
+            }
+            return (lastSpokenAt.get(a.id) ?? -1) - (lastSpokenAt.get(b.id) ?? -1);
+          })
+          .at(0);
+      }
+
+      if (!speaker) {
         break;
       }
 
-      const speaker = speakingPersonas.find((persona) => persona.id === selectedBid.personaId);
-      if (!speaker) {
-        continue;
+      if (!selectedBid) {
+        const warning = `No eligible bid selected at turn ${turnIndex + 1}; fallback speaker ${speaker.name} was chosen to continue toward requested turn count.`;
+        run.warnings = [...(run.warnings ?? []), warning];
+        await publishRunEvent(run, "run_warning", { message: warning });
       }
 
       const speakerProfile = profileByPersonaId.get(speaker.id);
@@ -1848,17 +1865,6 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
         speakerName: speaker.name,
         transcriptLine,
       });
-
-      const lowUrgency = validBids.filter((bid) => bid.urgency_1_to_10 <= 3).length;
-      if (turnIndex >= speakingPersonas.length * 2 && lowUrgency >= Math.ceil(speakingPersonas.length * 0.7)) {
-        sharedTranscript.push("Board Chair: Urgency appears to be tapering. Moving to synthesis.");
-        if (sharedTranscript.length > MAX_TRANSCRIPT_LINES) {
-          sharedTranscript.splice(0, sharedTranscript.length - MAX_TRANSCRIPT_LINES);
-        }
-        run.sharedTranscript = [...sharedTranscript];
-        await updateShadowBoardRun(run);
-        break;
-      }
     }
 
     const completed: ShadowBoardRun = {
