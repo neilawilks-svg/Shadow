@@ -828,6 +828,7 @@ async function publishRunEvent(
   run: ShadowBoardRun,
   type: ShadowBoardRunEvent["type"],
   payload: ShadowBoardRunEvent["payload"] = {},
+  options: { includeRun?: boolean } = {},
 ): Promise<void> {
   await publishShadowBoardEvent({
     eventId: `shadow-event-${randomUUID()}`,
@@ -835,10 +836,7 @@ async function publishRunEvent(
     shadowSessionId: run.shadowSessionId,
     type,
     createdAt: new Date().toISOString(),
-    payload: {
-      ...payload,
-      run,
-    },
+    payload: options.includeRun ? { ...payload, run } : { ...payload },
   });
 }
 
@@ -1855,9 +1853,14 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
     };
 
     await updateShadowBoardRun(completed);
-    await publishRunEvent(completed, "run_completed", {
-      message: "Shadow board run completed.",
-    });
+    await publishRunEvent(
+      completed,
+      "run_completed",
+      {
+        message: "Shadow board run completed.",
+      },
+      { includeRun: true },
+    );
 
     return completed;
   } catch (error) {
@@ -1868,9 +1871,14 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       error: error instanceof Error ? error.message : "Unknown shadow board failure",
     };
     await updateShadowBoardRun(failed);
-    await publishRunEvent(failed, "run_failed", {
-      message: failed.error,
-    });
+    await publishRunEvent(
+      failed,
+      "run_failed",
+      {
+        message: failed.error,
+      },
+      { includeRun: true },
+    );
     return failed;
   }
 }
@@ -1878,18 +1886,28 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
 export async function startShadowBoardRun(input: RunInput): Promise<ShadowBoardRun> {
   const runRecord = buildInitialRunRecord(input);
   await createShadowBoardRun(runRecord);
-  await publishRunEvent(runRecord, "run_started", {
-    message: "Shadow board run started.",
-  });
+  await publishRunEvent(
+    runRecord,
+    "run_started",
+    {
+      message: "Shadow board run started.",
+    },
+    { includeRun: true },
+  );
   return executeShadowBoardRun(runRecord, input);
 }
 
 export async function startShadowBoardRunAsync(input: RunInput): Promise<ShadowBoardRun> {
   const runRecord = buildInitialRunRecord(input);
   await createShadowBoardRun(runRecord);
-  await publishRunEvent(runRecord, "run_started", {
-    message: "Shadow board run started.",
-  });
+  await publishRunEvent(
+    runRecord,
+    "run_started",
+    {
+      message: "Shadow board run started.",
+    },
+    { includeRun: true },
+  );
 
   scheduleShadowRun(async () => {
     await executeShadowBoardRun(runRecord, input);
