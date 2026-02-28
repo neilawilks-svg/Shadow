@@ -6,7 +6,6 @@ import { Badge } from "@/components/badge";
 import { CostPanel } from "@/components/cost-panel";
 import { DocumentDropzone } from "@/components/document-dropzone";
 import { SectionCard } from "@/components/section-card";
-import { ShadowBoard8BitRoam } from "@/components/shadow-board-8bit";
 
 interface Persona {
   id: string;
@@ -334,28 +333,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   );
 
   const selectedPersonaCount = useMemo(() => selectedPersonaIds.length, [selectedPersonaIds]);
-
-  const roamPersonas = useMemo(() => {
-    const outputByName = new Map(runResult?.outputs.map((output) => [output.personaName, output]) ?? []);
-
-    return personas
-      .filter((persona) => selectedPersonaIds.includes(persona.id))
-      .map((persona) => {
-        const output = outputByName.get(persona.name);
-        const existingComments = (output?.comments ?? [])
-          .map((comment) => comment.trim())
-          .filter(Boolean)
-          .slice(0, 6);
-
-        return {
-          id: persona.id,
-          name: persona.name,
-          comment: output?.comment ?? `${persona.name}: awaiting live run output.`,
-          comments: existingComments,
-          thinkingSteps: output?.thinkingSteps ?? [],
-        };
-      });
-  }, [personas, runResult?.outputs, selectedPersonaIds]);
 
   const togglePersona = useCallback((id: string) => {
     setSelectedPersonaIds((current) => {
@@ -1159,19 +1136,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
             </div>
           </SectionCard>
         </div>
-      </SectionCard>
-
-      <SectionCard
-        title="8-Bit Virtual Board Room"
-        subtitle="Move around the boardroom and inspect each member's comments and reasoning bubbles"
-      >
-        <ShadowBoard8BitRoam
-          key={runResult?.runId ?? "default-seed"}
-          personas={roamPersonas}
-          simulationSeed={runResult?.runId ?? "default-seed"}
-          transcriptLines={runResult?.sharedTranscript ?? []}
-          active={Boolean(runResult?.runId)}
-        />
       </SectionCard>
 
       <SectionCard title="Shadow Board Report" subtitle="Formatted report for board prep review">
