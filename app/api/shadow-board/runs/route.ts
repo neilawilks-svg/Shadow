@@ -11,6 +11,7 @@ const agendaItemSchema = z.object({
   id: z.string().min(1).max(120).optional(),
   title: z.string().trim().min(1).max(240),
   timePercent: z.number().int().min(1).max(100),
+  detailedDescription: z.string().trim().max(20000).optional().default(""),
   desiredOutput: z.string().trim().max(4000).optional().default(""),
   questions: z.array(z.string().trim().min(1).max(500)).max(10).optional().default([]),
 });
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
         id: item.id ?? `agenda-item-${index + 1}`,
         title: item.title,
         timePercent: item.timePercent,
+        detailedDescription: item.detailedDescription,
         desiredOutput: item.desiredOutput,
         questions: item.questions,
       }))
@@ -83,6 +85,7 @@ export async function POST(request: Request) {
             id: "agenda-item-1",
             title: legacyTopics[0] ?? legacyAgenda,
             timePercent: 100,
+            detailedDescription: legacyAgenda,
             desiredOutput: legacyAgenda,
             questions: legacyTopics.slice(1),
           },

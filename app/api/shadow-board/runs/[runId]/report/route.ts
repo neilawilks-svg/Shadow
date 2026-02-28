@@ -62,6 +62,7 @@ function buildAgendaItemsForReport(params: {
       id: "agenda-item-1",
       title: params.runTopics[0] ?? params.runAgenda ?? "Agenda",
       timePercent: 100,
+      detailedDescription: params.runAgenda ?? "",
       desiredOutput: params.runAgenda ?? "",
       questions: params.runTopics.slice(1),
     },
@@ -164,6 +165,9 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
       .slice(0, 4);
 
     sections.push(`## Agenda Item ${i + 1}: ${item.title} (${item.timePercent}%)`);
+    sections.push("");
+    sections.push("### Detailed Description");
+    sections.push(item.detailedDescription || "No detailed description provided.");
     sections.push("");
     sections.push("### Desired Output");
     sections.push(item.desiredOutput || "No desired output specified.");

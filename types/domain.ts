@@ -211,6 +211,7 @@ export interface AgendaItem {
   id: string;
   title: string;
   timePercent: number;
+  detailedDescription?: string;
   desiredOutput: string;
   questions: string[];
   plannedTurns?: number;

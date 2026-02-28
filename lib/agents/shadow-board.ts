@@ -295,6 +295,7 @@ export function normalizeAgendaItems(input: {
       id: item.id?.trim() || `agenda-item-${index + 1}`,
       title: item.title.trim(),
       timePercent: Math.max(1, Math.min(100, Math.round(item.timePercent))),
+      detailedDescription: item.detailedDescription?.trim() ?? "",
       desiredOutput: item.desiredOutput?.trim() ?? "",
       questions: normalizeStringArray(item.questions, 10),
       plannedTurns: Math.max(0, item.plannedTurns ?? 0),
@@ -307,6 +308,7 @@ export function normalizeAgendaItems(input: {
       id: "agenda-item-1",
       title: fallbackTitle || "Agenda item",
       timePercent: 100,
+      detailedDescription: input.agenda,
       desiredOutput: input.agenda,
       questions: normalizeStringArray(input.topics.slice(1), 10),
       plannedTurns: 0,
@@ -384,6 +386,7 @@ export function buildAgendaTurnSchedule(agendaItems: PlannedAgendaItem[], maxCon
 function buildAgendaItemPromptContext(item: PlannedAgendaItem): string {
   return [
     `Current agenda item: ${item.title} (${item.timePercent}% planned, ${item.plannedTurns} planned turns)`,
+    `Detailed description: ${item.detailedDescription || "No detailed description provided."}`,
     `Desired output: ${item.desiredOutput || "No specific desired output provided."}`,
     "Questions to answer:",
     ...(item.questions.length > 0 ? item.questions.map((question) => `- ${question}`) : ["- none specified"]),

@@ -43,6 +43,7 @@ interface AgendaItemDraft {
   id: string;
   title: string;
   timePercent: number;
+  detailedDescription: string;
   desiredOutput: string;
   questionsText: string;
 }
@@ -208,15 +209,19 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [agendaItems, setAgendaItems] = useState<AgendaItemDraft[]>([
     {
       id: "agenda-item-1",
-      title: "Evaluate expansion strategy for an AI-enabled board advisory offer",
+      title: "Show Me the Value: Will AI Mean the end of Time & Materials pricing?",
       timePercent: 60,
-      desiredOutput: "Actionable board insights on where to focus first and major risk constraints.",
-      questionsText: "What should be prioritised in the next 90 days?\nWhich risks should be mitigated first?",
+      detailedDescription:
+        "For decades, consulting and professional services fees have been grounded in effort: time-and-materials or fixed-price models tied to hours invested. AI is disrupting that foundation. A notable example is KPMG reportedly negotiating a 14% fee reduction from its own auditor, arguing AI should lower delivery cost. This highlights a deeper shift: if consultants can use AI to deliver faster, clients can increasingly access similar capabilities. As information asymmetry narrows, firms may need to differentiate through accountability for outcomes rather than effort expended, including standing behind AI-generated recommendations and delivery quality. This implies higher risk and revenue variability for firms used to predictable utilisation models. It raises strategic questions for Slalom UK & Ireland on pricing, value articulation, contract structures, governance, and how to avoid commoditisation while maintaining quality and innovation.",
+      desiredOutput:
+        "Share the insights and different perspectives of the CAB Board Members. Where is there alignment, where did opinions differ. What questions were raised? Were there any recommendations of actions Slalom should take to position themselves effectively?",
+      questionsText: "",
     },
     {
       id: "agenda-item-2",
       title: "Define operating model and governance for pilot delivery",
       timePercent: 40,
+      detailedDescription: "",
       desiredOutput: "Practical setup guidance for pilot governance, controls, and team structure.",
       questionsText: "What governance checkpoints are mandatory?\nWhat roles should own delivery and risk?",
     },
@@ -376,6 +381,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         id: `agenda-item-${Date.now()}`,
         title: "",
         timePercent: 0,
+        detailedDescription: "",
         desiredOutput: "",
         questionsText: "",
       },
@@ -573,6 +579,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         id: item.id || `agenda-item-${index + 1}`,
         title: item.title.trim(),
         timePercent: Math.round(item.timePercent),
+        detailedDescription: item.detailedDescription.trim(),
         desiredOutput: item.desiredOutput.trim(),
         questions: item.questionsText
           .split(/\r?\n/)
@@ -786,6 +793,15 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                           })
                         }
                         className="w-36 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
+                      Detailed Description
+                      <textarea
+                        value={item.detailedDescription}
+                        onChange={(event) => updateAgendaItem(item.id, { detailedDescription: event.target.value })}
+                        className="min-h-36 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
                       />
                     </label>
 
