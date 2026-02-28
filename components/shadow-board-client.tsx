@@ -201,6 +201,7 @@ function renderMarkdownReport(markdown: string): ReactNode[] {
 
 export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPageProps) {
   const streamRef = useRef<EventSource | null>(null);
+  const missingRunPollCountRef = useRef(0);
   const [personas] = useState<Persona[]>(initialPersonas);
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>(
     initialPersonas.filter((persona) => persona.role === "board_member").map((persona) => persona.id),
@@ -467,12 +468,12 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     return true;
   }, []);
 
-  const fetchRunById = useCallback(async (runId: string): Promise<RunResult | null> => {
+  const fetchRunById = useCallback(async (runId: string): Promise<{ run: RunResult | null; status: number }> => {
     const response = await fetch(`/api/shadow-board/runs/${runId}`);
     if (!response.ok) {
-      return null;
+      return { run: null, status: response.status };
     }
-    return (await response.json()) as RunResult;
+    return { run: (await response.json()) as RunResult, status: response.status };
   }, []);
 
   const manualGenerateReport = useCallback(async () => {
@@ -586,6 +587,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     setRunWarnings([]);
     setReportContent("");
     setReportFormat(outputFormat);
+    missingRunPollCountRef.current = 0;
     closeShadowStream();
 
     try {
@@ -697,7 +699,21 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     const runId = runResult.runId;
     const interval = window.setInterval(() => {
       void (async () => {
-        const latest = await fetchRunById(runId);
+        const result = await fetchRunById(runId);
+        if (result.status === 404) {
+          missingRunPollCountRef.current += 1;
+          if (missingRunPollCountRef.current >= 4) {
+            setStatus("failed");
+            setError(
+              "Run tracking was lost (HTTP 404). This usually happens after a deployment or server restart. Please start a new run.",
+            );
+            closeShadowStream();
+          }
+          return;
+        }
+
+        missingRunPollCountRef.current = 0;
+        const latest = result.run;
         if (!latest) {
           return;
         }
