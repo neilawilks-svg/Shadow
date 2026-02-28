@@ -45,7 +45,7 @@ interface AgendaItemDraft {
   timePercent: number;
   detailedDescription: string;
   desiredOutput: string;
-  questionsText: string;
+  questions: string[];
 }
 
 interface RunResult {
@@ -215,7 +215,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         "For decades, consulting and professional services fees have been grounded in effort: time-and-materials or fixed-price models tied to hours invested. AI is disrupting that foundation. A notable example is KPMG reportedly negotiating a 14% fee reduction from its own auditor, arguing AI should lower delivery cost. This highlights a deeper shift: if consultants can use AI to deliver faster, clients can increasingly access similar capabilities. As information asymmetry narrows, firms may need to differentiate through accountability for outcomes rather than effort expended, including standing behind AI-generated recommendations and delivery quality. This implies higher risk and revenue variability for firms used to predictable utilisation models. It raises strategic questions for Slalom UK & Ireland on pricing, value articulation, contract structures, governance, and how to avoid commoditisation while maintaining quality and innovation.",
       desiredOutput:
         "Share the insights and different perspectives of the CAB Board Members. Where is there alignment, where did opinions differ. What questions were raised? Were there any recommendations of actions Slalom should take to position themselves effectively?",
-      questionsText: "",
+      questions: [],
     },
     {
       id: "agenda-item-2",
@@ -225,8 +225,10 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         "Slalom has launched a new strategy called “Best and Beyond” (Jan 2026). We would welcome your reflections and feedback.\n\nContext - Why We’re Changing\n- Market dynamics shifted: demand tightened, AI raised expectations, and clients now want faster, measurable value.\n- The type of work changed: resource consulting declined sharply while project consulting strengthened and grew.\n- Effort wasn’t compounding: people worked hard, but the system no longer multiplied that effort, requiring a reset.\n\nWhere We Stand\n- Strengthened financial position: Slalom is debt-free, stable, and able to invest deliberately.\n- Real momentum returning: record bookings, high utilisation, and client value scores at all-time highs.\n- AI leadership gap = opportunity: only 40% of clients see us as an AI leader - a clear, addressable upside.\n\nBest & Beyond - Three Core Priorities\n- Elevate sales: operate the core efficiently; shift to outcomes; expand with new commercial models.\n- Ignite our culture, together: clarify One Slalom ways of working; build the Empowerment Company; enable 10x team impact.\n- Lead with AI: deepen hyperscaler partnerships; become an AI-native organisation; scale human + agent workflows.\n\nSummary for Slalom CAB London\n“Best and Beyond” is Slalom’s updated two-year strategy and operating focus as the firm approaches its 25-year mark. It explains why recent performance felt harder despite strong client work, and how Slalom intends to restore durable growth by reconnecting effort to impact through a clearer, more integrated system.\n\nPurpose and framing\nSlalom’s purpose is to help people and organizations “dream bigger, move faster, and build better tomorrows for all,” while building a company where team members are empowered to grow and feel connected. The strategy aims to align culture, innovation, and execution so results compound again.\n\nWhat changed in the market\n- The economy moved from demand > supply to supply > demand, tightening professional services economics and increasing outcome accountability.\n- AI began changing how clients judge speed, value, and credibility.\n- COVID-era work shifts altered how teams connect and how trust forms.\n- Competitors adopted practices that once differentiated Slalom, eroding uniqueness.\n\nBusiness model explanation\nHistorically Slalom ran two complementary models:\n1) Core project consulting (end-to-end outcomes)\n2) Resource consulting (individuals/small teams in clients)\nAt peak (2022) the mix was roughly balanced. From early 2023, resource consulting fell sharply as smaller clients pulled back, while core project consulting grew in a difficult market but not enough to offset the speed/magnitude of decline. Slalom deliberately avoided offshore managed services annuity contracts to reinforce proximity and outcomes, but this reduced fallback annuity stability during downturns.\n\nEarly indicators for future growth\n- First year in three with improved sales bookings in both Q4 and second half.\n- Q4 2025 bookings up 20% YoY; December 2025 among strongest sales months ever.\n- Largest Q4 ever; second-semester bookings exceeding goal.\n- Utilization back above target; billings sustainably increasing.\n- Client survey results among highest in history, including an “industry best” for value creation.\n\nAt the same time, Slalom acknowledges gaps: only 40% of clients currently perceive Slalom as leading with AI, and internal empowerment scores declined, though client delivery remained strong.\n\nStrategic shift\nRather than a broad list of initiatives, Slalom frames the strategy as a disciplined system for compounding effort over a two-year window. The firm is entering this chapter debt-free, with a strong balance sheet and ability to invest deliberately. Execution is intended to show up market-by-market, with each market reaching all-time performance and then exceeding it, supported by One Slalom collaboration.\n\nBottom line\nSlalom’s updated strategy responds to structural market change and resource-consulting decline. The plan emphasizes disciplined integration across the firm, stronger differentiation through measurable outcomes (not hours), and accelerated credibility in AI, executed through a focused two-year operating system intended to restore durable, compounding growth.\n\nPriorities and horizons\nSlalom’s approach: three priorities pursued across three horizons (near-term core integration -> outcome-driven differentiation -> durable frontier moves), forming “Slalom’s 3x3”.",
       desiredOutput:
         "Share the insights and different perspectives of the CAB Board Members. Where is there alignment, where did opinions differ. What questions were raised?",
-      questionsText:
-        "Are you in the 40% who see Slalom as an AI leader, and if not, what would move you into that group?\nWe currently deliver 10x impact sometimes, and average 3x impact across our work. The industry average is 2x impact. How do we move to delivering 10x impact most of the time?",
+      questions: [
+        "Are you in the 40% who see Slalom as an AI leader, and if not, what would move you into that group?",
+        "We currently deliver 10x impact sometimes, and average 3x impact across our work. The industry average is 2x impact. How do we move to delivering 10x impact most of the time?",
+      ],
     },
   ]);
   const [meetingArtifacts, setMeetingArtifacts] = useState(
@@ -386,13 +388,45 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         timePercent: 0,
         detailedDescription: "",
         desiredOutput: "",
-        questionsText: "",
+        questions: [],
       },
     ]);
   }, []);
 
   const removeAgendaItem = useCallback((id: string) => {
     setAgendaItems((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  const addQuestion = useCallback((agendaItemId: string) => {
+    setAgendaItems((current) =>
+      current.map((item) =>
+        item.id === agendaItemId ? { ...item, questions: [...item.questions, ""] } : item,
+      ),
+    );
+  }, []);
+
+  const updateQuestion = useCallback((agendaItemId: string, questionIndex: number, value: string) => {
+    setAgendaItems((current) =>
+      current.map((item) => {
+        if (item.id !== agendaItemId) {
+          return item;
+        }
+        return {
+          ...item,
+          questions: item.questions.map((question, idx) => (idx === questionIndex ? value : question)),
+        };
+      }),
+    );
+  }, []);
+
+  const removeQuestion = useCallback((agendaItemId: string, questionIndex: number) => {
+    setAgendaItems((current) =>
+      current.map((item) =>
+        item.id === agendaItemId
+          ? { ...item, questions: item.questions.filter((_, idx) => idx !== questionIndex) }
+          : item,
+      ),
+    );
   }, []);
 
   const refreshDocuments = useCallback(async () => {
@@ -584,10 +618,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         timePercent: Math.round(item.timePercent),
         detailedDescription: item.detailedDescription.trim(),
         desiredOutput: item.desiredOutput.trim(),
-        questions: item.questionsText
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean),
+        questions: item.questions.map((question) => question.trim()).filter(Boolean),
       }));
 
       const response = await fetch("/api/shadow-board/runs", {
@@ -817,14 +848,48 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                       />
                     </label>
 
-                    <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
-                      Specific Questions (one per line)
-                      <textarea
-                        value={item.questionsText}
-                        onChange={(event) => updateAgendaItem(item.id, { questionsText: event.target.value })}
-                        className="min-h-20 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
-                      />
-                    </label>
+                    <div className="grid gap-2 text-xs text-[color:var(--ink-3)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <p>Specific Questions (optional)</p>
+                        <button
+                          type="button"
+                          onClick={() => addQuestion(item.id)}
+                          className="rounded-full border border-[color:var(--line)] px-2 py-0.5 text-[10px] text-[color:var(--ink-2)]"
+                        >
+                          + Add question
+                        </button>
+                      </div>
+                      {item.questions.length === 0 ? (
+                        <p className="text-[11px] text-[color:var(--ink-3)]">No questions added for this agenda item.</p>
+                      ) : (
+                        <div className="grid gap-2">
+                          {item.questions.map((question, questionIndex) => (
+                            <div
+                              key={`${item.id}-question-${questionIndex}`}
+                              className="grid gap-1 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-2"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-[11px] font-semibold text-[color:var(--ink-3)]">
+                                  Question {questionIndex + 1}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => removeQuestion(item.id, questionIndex)}
+                                  className="rounded-full border border-[color:var(--line)] px-2 py-0.5 text-[10px] text-[color:var(--ink-2)]"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              <textarea
+                                value={question}
+                                onChange={(event) => updateQuestion(item.id, questionIndex, event.target.value)}
+                                className="min-h-16 rounded-lg border border-[color:var(--line)] bg-[color:var(--card-bg)] p-2 text-sm text-[color:var(--ink-1)]"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {agendaValidationError ? (
