@@ -1822,7 +1822,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
         personaArtifacts: speakerPersonaArtifacts,
         reasoningLevel,
         randomness,
-        selectedBid,
+        selectedBid: selectedBid ?? undefined,
         personaTurnHistory: priorSpeakerTurns,
       });
 
