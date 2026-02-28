@@ -105,6 +105,7 @@ interface ErrorPayload {
 export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPageProps) {
   const streamRef = useRef<EventSource | null>(null);
   const missingRunPollCountRef = useRef(0);
+  const lastRunEventAtRef = useRef<number>(0);
   const isMorganPersona = (persona: Persona) => persona.name.trim().toLowerCase() === "morgan";
   const [personas] = useState<Persona[]>(initialPersonas);
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>(
@@ -397,6 +398,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           if (!payload || payload.runId !== runId) {
             return;
           }
+          lastRunEventAtRef.current = Date.now();
+          missingRunPollCountRef.current = 0;
 
           if (payload.payload?.run) {
             setRunResult(payload.payload.run);
@@ -558,8 +561,11 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       void (async () => {
         const result = await fetchRunById(runId);
         if (result.status === 404) {
-          missingRunPollCountRef.current += 1;
-          if (missingRunPollCountRef.current >= 4) {
+          const recentlyReceivedEvent = Date.now() - lastRunEventAtRef.current < 45_000;
+          if (!recentlyReceivedEvent) {
+            missingRunPollCountRef.current += 1;
+          }
+          if (missingRunPollCountRef.current >= 24) {
             setStatus("failed");
             setError(
               "Run tracking was lost (HTTP 404). This usually happens after a deployment or server restart. Please start a new run.",
