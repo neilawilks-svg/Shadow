@@ -30,6 +30,7 @@ import {
   updateShadowBoardRun,
 } from "@/lib/store/repository";
 import type {
+  AgendaItem,
   BoardMemberAgentProfile,
   BoardTurnBid,
   PersonaDebateOutput,
@@ -37,6 +38,7 @@ import type {
   ShadowBoardRecommendation,
   ShadowBoardRun,
   ShadowBoardRunEvent,
+  ShadowBoardTurnMeta,
 } from "@/types/domain";
 
 const execFileAsync = promisify(execFile);
@@ -44,6 +46,7 @@ const execFileAsync = promisify(execFile);
 interface RunInput {
   agenda: string;
   topics: string[];
+  agendaItems?: AgendaItem[];
   personaIds: string[];
   meetingId?: string;
   shadowSessionId?: string;
@@ -55,6 +58,10 @@ interface RunInput {
   outputFormat?: "markdown" | "plain_text";
   targetWordCount?: number;
   transcriptSeed?: string[];
+}
+
+interface PlannedAgendaItem extends AgendaItem {
+  plannedTurns: number;
 }
 
 interface PersonaTurn {
@@ -278,11 +285,109 @@ function stripSpeakerPrefix(comment: string, personaName: string): string {
   return comment.replace(pattern, "").trim();
 }
 
-function getTopicForTurn(topics: string[], turnIndex: number): string {
-  if (topics.length === 0) {
-    return "the proposal";
+export function normalizeAgendaItems(input: {
+  agenda: string;
+  topics: string[];
+  agendaItems?: AgendaItem[];
+}): PlannedAgendaItem[] {
+  if (Array.isArray(input.agendaItems) && input.agendaItems.length > 0) {
+    return input.agendaItems.map((item, index) => ({
+      id: item.id?.trim() || `agenda-item-${index + 1}`,
+      title: item.title.trim(),
+      timePercent: Math.max(1, Math.min(100, Math.round(item.timePercent))),
+      desiredOutput: item.desiredOutput?.trim() ?? "",
+      questions: normalizeStringArray(item.questions, 10),
+      plannedTurns: Math.max(0, item.plannedTurns ?? 0),
+    }));
   }
-  return topics[turnIndex % topics.length] ?? topics[0] ?? "the proposal";
+
+  const fallbackTitle = input.topics[0] ?? input.agenda;
+  return [
+    {
+      id: "agenda-item-1",
+      title: fallbackTitle || "Agenda item",
+      timePercent: 100,
+      desiredOutput: input.agenda,
+      questions: normalizeStringArray(input.topics.slice(1), 10),
+      plannedTurns: 0,
+    },
+  ];
+}
+
+export function allocateTurnsForAgendaItems(
+  maxConversationTurns: number,
+  agendaItems: PlannedAgendaItem[],
+): PlannedAgendaItem[] {
+  if (agendaItems.length === 0 || maxConversationTurns <= 0) {
+    return [];
+  }
+
+  const totalPercent = agendaItems.reduce((sum, item) => sum + item.timePercent, 0) || 1;
+  const quotas = agendaItems.map((item) => (item.timePercent / totalPercent) * maxConversationTurns);
+  const floorTurns = quotas.map((quota) => Math.floor(quota));
+  const remainders = quotas.map((quota, index) => ({ index, remainder: quota - floorTurns[index]! }));
+
+  let allocated = floorTurns.reduce((sum, turns) => sum + turns, 0);
+  const plannedTurns = [...floorTurns];
+
+  remainders.sort((a, b) => b.remainder - a.remainder);
+  let remainderIndex = 0;
+  while (allocated < maxConversationTurns) {
+    const target = remainders[remainderIndex % remainders.length]?.index ?? 0;
+    plannedTurns[target] = (plannedTurns[target] ?? 0) + 1;
+    allocated += 1;
+    remainderIndex += 1;
+  }
+
+  if (maxConversationTurns >= agendaItems.length) {
+    const needsTurns = plannedTurns
+      .map((turns, index) => ({ turns, index }))
+      .filter((item) => item.turns === 0);
+    const donors = () =>
+      plannedTurns
+        .map((turns, index) => ({ turns, index }))
+        .filter((item) => item.turns > 1)
+        .sort((a, b) => b.turns - a.turns);
+
+    for (const needy of needsTurns) {
+      const donor = donors()[0];
+      if (!donor) {
+        break;
+      }
+      plannedTurns[donor.index] = donor.turns - 1;
+      plannedTurns[needy.index] = 1;
+    }
+  }
+
+  return agendaItems.map((item, index) => ({
+    ...item,
+    plannedTurns: plannedTurns[index] ?? 0,
+  }));
+}
+
+export function buildAgendaTurnSchedule(agendaItems: PlannedAgendaItem[], maxConversationTurns: number): PlannedAgendaItem[] {
+  const schedule: PlannedAgendaItem[] = [];
+  for (const item of agendaItems) {
+    for (let i = 0; i < item.plannedTurns; i += 1) {
+      schedule.push(item);
+    }
+  }
+  if (schedule.length === 0 && agendaItems[0]) {
+    schedule.push(agendaItems[0]);
+  }
+  while (schedule.length < maxConversationTurns && agendaItems.length > 0) {
+    schedule.push(agendaItems[schedule.length % agendaItems.length]!);
+  }
+  return schedule.slice(0, maxConversationTurns);
+}
+
+function buildAgendaItemPromptContext(item: PlannedAgendaItem): string {
+  return [
+    `Current agenda item: ${item.title} (${item.timePercent}% planned, ${item.plannedTurns} planned turns)`,
+    `Desired output: ${item.desiredOutput || "No specific desired output provided."}`,
+    "Questions to answer:",
+    ...(item.questions.length > 0 ? item.questions.map((question) => `- ${question}`) : ["- none specified"]),
+  ].join("\n");
 }
 
 function shouldApplyAiDepthGuidance(agenda: string, topics: string[]): boolean {
@@ -797,6 +902,7 @@ async function generatePersonaBid(params: {
   persona: PersonaProfile;
   profile: BoardMemberAgentProfile;
   topic: string;
+  agendaItemContext: string;
   agenda: string;
   topics: string[];
   transcript: string[];
@@ -833,6 +939,7 @@ async function generatePersonaBid(params: {
           `Round: ${params.turnIndex + 1}`,
           `Agenda: ${params.agenda}`,
           `Topic focus: ${params.topic}`,
+          params.agendaItemContext,
           `Reasoning level (1-10): ${params.reasoningLevel}`,
           `Randomness setting (0-1): ${params.randomness.toFixed(2)}`,
           "Task:",
@@ -890,6 +997,7 @@ async function runPersonaCommentAttempt(params: {
   persona: PersonaProfile;
   profile: BoardMemberAgentProfile;
   topic: string;
+  agendaItemContext: string;
   agenda: string;
   topics: string[];
   transcript: string[];
@@ -928,6 +1036,7 @@ async function runPersonaCommentAttempt(params: {
           `Round: ${params.turnIndex + 1}`,
           `Agenda: ${params.agenda}`,
           `Topic focus: ${params.topic}`,
+          params.agendaItemContext,
           `Reasoning level (1-10): ${params.reasoningLevel}`,
           `Randomness setting (0-1): ${params.randomness.toFixed(2)}`,
           params.selectedBid
@@ -1039,6 +1148,7 @@ async function generatePersonaComment(params: {
   persona: PersonaProfile;
   profile: BoardMemberAgentProfile;
   topic: string;
+  agendaItemContext: string;
   agenda: string;
   topics: string[];
   transcript: string[];
@@ -1296,6 +1406,11 @@ function buildInitialRunRecord(input: RunInput): ShadowBoardRun {
     shadowSessionId,
     agenda: input.agenda,
     topics: input.topics,
+    agendaItems: normalizeAgendaItems({
+      agenda: input.agenda,
+      topics: input.topics,
+      agendaItems: input.agendaItems,
+    }),
     personaIds: input.personaIds,
     meetingId: input.meetingId,
     documentIds: normalizeStringArray(input.documentIds, 300),
@@ -1306,6 +1421,7 @@ function buildInitialRunRecord(input: RunInput): ShadowBoardRun {
     outputFormat: input.outputFormat ?? "markdown",
     targetWordCount: Math.max(150, Math.min(4000, input.targetWordCount ?? 600)),
     sharedTranscript: normalizeStringArray(input.transcriptSeed, 80),
+    turnMeta: [],
     status: "running",
     startedAt: new Date().toISOString(),
     outputs: [],
@@ -1398,13 +1514,25 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
     const lastSpokenAt = new Map<string, number>();
     const turnsByPersona = new Map<string, PersonaTurn[]>();
     const allBids: BoardTurnBid[] = [];
+    const turnMeta: ShadowBoardTurnMeta[] = [];
 
     for (const persona of speakingPersonas) {
       turnCounts.set(persona.id, 0);
       turnsByPersona.set(persona.id, []);
     }
 
-    const topicList = input.topics.length > 0 ? input.topics : [input.agenda];
+    const normalizedAgendaItems = normalizeAgendaItems({
+      agenda: input.agenda,
+      topics: input.topics,
+      agendaItems: input.agendaItems,
+    });
+    const plannedAgendaItems = allocateTurnsForAgendaItems(maxConversationTurns, normalizedAgendaItems);
+    const turnSchedule = buildAgendaTurnSchedule(plannedAgendaItems, maxConversationTurns);
+    const topicList = plannedAgendaItems.map((item) => item.title);
+    run.agendaItems = plannedAgendaItems;
+    if (transcriptSeed.length === 0 && sharedTranscript.length >= 2) {
+      sharedTranscript[1] = `Board Chair: Focus topics - ${topicList.join("; ")}`;
+    }
 
     const opener = speakingPersonas[Math.floor(Math.random() * speakingPersonas.length)] ?? speakingPersonas[0];
     if (!opener) {
@@ -1414,7 +1542,11 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
     run.firstSpeakerPersonaId = opener.id;
     await updateShadowBoardRun(run);
 
-    const openingTopic = getTopicForTurn(topicList, 0);
+    const openingAgendaItem = turnSchedule[0] ?? plannedAgendaItems[0];
+    const openingTopic = openingAgendaItem?.title ?? topicList[0] ?? input.agenda;
+    const openingAgendaContext = openingAgendaItem
+      ? buildAgendaItemPromptContext(openingAgendaItem)
+      : "Current agenda item: general discussion";
     await publishRunEvent(run, "turn_started", {
       turnIndex: 1,
       topic: openingTopic,
@@ -1447,6 +1579,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       persona: opener,
       profile: openerProfile,
       topic: openingTopic,
+      agendaItemContext: openingAgendaContext,
       agenda: input.agenda,
       topics: topicList,
       transcript: sharedTranscript,
@@ -1502,6 +1635,15 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
 
     run.sharedTranscript = [...sharedTranscript];
     run.turnBids = [...allBids];
+    if (openingAgendaItem) {
+      turnMeta.push({
+        turnIndex: 1,
+        agendaItemId: openingAgendaItem.id,
+        topic: openingTopic,
+        speakerPersonaId: opener.id,
+      });
+    }
+    run.turnMeta = [...turnMeta];
     run.outputs = speakingPersonas.map((persona) => buildPersonaOutput(persona, turnsByPersona.get(persona.id) ?? []));
     await updateShadowBoardRun(run);
     await publishRunEvent(run, "turn_committed", {
@@ -1513,7 +1655,11 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
     });
 
     for (let turnIndex = 1; turnIndex < maxConversationTurns; turnIndex += 1) {
-      const topic = getTopicForTurn(topicList, turnIndex);
+      const activeAgendaItem = turnSchedule[turnIndex] ?? plannedAgendaItems[turnIndex % plannedAgendaItems.length];
+      const topic = activeAgendaItem?.title ?? topicList[turnIndex % topicList.length] ?? input.agenda;
+      const agendaItemContext = activeAgendaItem
+        ? buildAgendaItemPromptContext(activeAgendaItem)
+        : "Current agenda item: general discussion";
       await publishRunEvent(run, "turn_started", {
         turnIndex: turnIndex + 1,
         topic,
@@ -1548,6 +1694,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
             persona,
             profile,
             topic,
+            agendaItemContext,
             agenda: input.agenda,
             topics: topicList,
             transcript: sharedTranscript,
@@ -1596,6 +1743,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
         persona: speaker,
         profile: speakerProfile,
         topic,
+        agendaItemContext,
         agenda: input.agenda,
         topics: topicList,
         transcript: sharedTranscript,
@@ -1646,6 +1794,15 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
 
       run.sharedTranscript = [...sharedTranscript];
       run.turnBids = [...allBids];
+      if (activeAgendaItem) {
+        turnMeta.push({
+          turnIndex: turnIndex + 1,
+          agendaItemId: activeAgendaItem.id,
+          topic,
+          speakerPersonaId: speaker.id,
+        });
+      }
+      run.turnMeta = [...turnMeta];
       run.outputs = speakingPersonas.map((persona) => buildPersonaOutput(persona, turnsByPersona.get(persona.id) ?? []));
       await updateShadowBoardRun(run);
       await publishRunEvent(run, "turn_committed", {
@@ -1689,6 +1846,8 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       consensusSummary: consensus.consensusSummary,
       dissentSummary: consensus.dissentSummary,
       sharedTranscript,
+      agendaItems: plannedAgendaItems,
+      turnMeta,
       meetingArtifacts: baseArtifacts,
     };
 

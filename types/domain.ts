@@ -207,11 +207,28 @@ export interface PersonaDebateOutput {
   confidence: number;
 }
 
+export interface AgendaItem {
+  id: string;
+  title: string;
+  timePercent: number;
+  desiredOutput: string;
+  questions: string[];
+  plannedTurns?: number;
+}
+
+export interface ShadowBoardTurnMeta {
+  turnIndex: number;
+  agendaItemId: string;
+  topic: string;
+  speakerPersonaId?: string;
+}
+
 export interface ShadowBoardRun {
   runId: string;
   shadowSessionId?: string;
   agenda: string;
   topics: string[];
+  agendaItems?: AgendaItem[];
   personaIds: string[];
   meetingId?: string;
   documentIds?: string[];
@@ -220,6 +237,7 @@ export interface ShadowBoardRun {
   outputFormat?: "markdown" | "plain_text";
   targetWordCount?: number;
   sharedTranscript?: string[];
+  turnMeta?: ShadowBoardTurnMeta[];
   firstSpeakerPersonaId?: string;
   skippedPersonaIds?: string[];
   warnings?: string[];

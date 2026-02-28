@@ -144,7 +144,9 @@ describe("api contracts", () => {
 
       const terminal = await waitForShadowRunStatus(payload.runId);
       expect(terminal.status).toBe("failed");
-      expect(terminal.error ?? "").toContain("Board-member agent profiles are missing");
+      expect(terminal.error ?? "").toMatch(
+        /Board-member agent profiles are missing|Insufficient speaking quorum after profile validation/,
+      );
     } finally {
       if (hadPeopleDir) {
         await fs.rename(peopleBackupDir, peopleDir);

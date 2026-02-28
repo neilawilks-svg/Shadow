@@ -1,3 +1,5 @@
+import type { AgendaItem, ShadowBoardTurnMeta } from "@/types/domain";
+
 import { jsonError, jsonOk } from "@/lib/http";
 import { getShadowBoardRun } from "@/lib/store/repository";
 
@@ -36,6 +38,45 @@ function toPlainText(markdown: string): string {
     .replace(/^\-\s+/gm, "• ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function parseTurnIndex(line: string): number | null {
+  const match = line.match(/^\[Turn\s+(\d+)\]/i);
+  if (!match) {
+    return null;
+  }
+  const value = Number.parseInt(match[1] ?? "", 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function buildAgendaItemsForReport(params: {
+  runAgenda: string;
+  runTopics: string[];
+  agendaItems?: AgendaItem[];
+}): AgendaItem[] {
+  if (Array.isArray(params.agendaItems) && params.agendaItems.length > 0) {
+    return params.agendaItems;
+  }
+  return [
+    {
+      id: "agenda-item-1",
+      title: params.runTopics[0] ?? params.runAgenda ?? "Agenda",
+      timePercent: 100,
+      desiredOutput: params.runAgenda ?? "",
+      questions: params.runTopics.slice(1),
+    },
+  ];
+}
+
+function buildTurnMetaFallback(lines: string[], agendaItemId: string, topic: string): ShadowBoardTurnMeta[] {
+  return lines
+    .map((line) => parseTurnIndex(line))
+    .filter((value): value is number => typeof value === "number")
+    .map((turnIndex) => ({
+      turnIndex,
+      agendaItemId,
+      topic,
+    }));
 }
 
 function toTranscriptBullets(lines: string[]): string[] {
@@ -80,37 +121,96 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
     return jsonError("Shadow board run not found.", 404);
   }
 
-  const markdownRaw = [
-    `# Shadow Board Report (${run.runId})`,
-    "",
-    "## Agenda",
-    run.agenda,
-    "",
-    "## Topics",
-    ...run.topics.map((topic) => `- ${topic}`),
-    "",
-    "## Meeting Artifacts",
+  const agendaItems = buildAgendaItemsForReport({
+    runAgenda: run.agenda,
+    runTopics: run.topics,
+    agendaItems: run.agendaItems,
+  });
+
+  const transcriptLines = run.sharedTranscript ?? [];
+  const turnMeta =
+    (run.turnMeta ?? []).length > 0
+      ? run.turnMeta ?? []
+      : buildTurnMetaFallback(transcriptLines, agendaItems[0]?.id ?? "agenda-item-1", agendaItems[0]?.title ?? run.agenda);
+  const transcriptByTurn = new Map<number, string>();
+  for (const line of transcriptLines) {
+    const turnIndex = parseTurnIndex(line);
+    if (turnIndex !== null) {
+      transcriptByTurn.set(turnIndex, line);
+    }
+  }
+
+  const sections: string[] = [];
+  sections.push(`# Shadow Board Report (${run.runId})`);
+  sections.push("");
+  sections.push("## Agenda Overview");
+  sections.push(...agendaItems.map((item, index) => `- **${index + 1}. ${item.title}** - ${item.timePercent}% | planned turns: ${item.plannedTurns ?? 0}`));
+  sections.push("");
+  sections.push("## Consensus");
+  sections.push(run.consensusSummary || "No consensus summary available.");
+  sections.push("");
+  sections.push("## Dissent");
+  sections.push(run.dissentSummary || "No dissent summary available.");
+  sections.push("");
+
+  for (let i = 0; i < agendaItems.length; i += 1) {
+    const item = agendaItems[i]!;
+    const itemMeta = turnMeta.filter((entry) => entry.agendaItemId === item.id);
+    const itemTurnLines = itemMeta
+      .map((entry) => transcriptByTurn.get(entry.turnIndex))
+      .filter((line): line is string => Boolean(line));
+    const itemRecommendations = run.recommendations
+      .filter((rec) => rec.theme.toLowerCase().includes(item.title.toLowerCase()) || rec.recommendation.toLowerCase().includes(item.title.toLowerCase()))
+      .slice(0, 4);
+
+    sections.push(`## Agenda Item ${i + 1}: ${item.title} (${item.timePercent}%)`);
+    sections.push("");
+    sections.push("### Desired Output");
+    sections.push(item.desiredOutput || "No desired output specified.");
+    sections.push("");
+    sections.push("### Questions");
+    sections.push(...(item.questions.length > 0 ? item.questions.map((question) => `- ${question}`) : ["- none provided"]));
+    sections.push("");
+    sections.push("### Discussion Highlights");
+    sections.push(...(itemTurnLines.length > 0 ? itemTurnLines.slice(0, 8).map((line) => `- ${line}`) : ["- No turns mapped to this agenda item."]));
+    sections.push("");
+    sections.push("### Recommendations");
+    sections.push(
+      ...(itemRecommendations.length > 0
+        ? itemRecommendations.map(
+            (recommendation) =>
+              `- **${recommendation.theme}**: ${recommendation.recommendation} (confidence: ${Math.round(recommendation.confidence * 100)}%)`,
+          )
+        : run.recommendations.length > 0
+          ? run.recommendations
+              .slice(0, 3)
+              .map(
+                (recommendation) =>
+                  `- **${recommendation.theme}**: ${recommendation.recommendation} (confidence: ${Math.round(
+                    recommendation.confidence * 100,
+                  )}%)`,
+              )
+          : ["- no recommendations recorded"]),
+    );
+    sections.push("");
+    sections.push("### Transcript Excerpt");
+    sections.push(...toTranscriptBullets(itemTurnLines.length > 0 ? itemTurnLines : transcriptLines.slice(0, 10)));
+    sections.push("");
+  }
+
+  sections.push("## Meeting Artifacts");
+  sections.push(
     ...(run.meetingArtifacts && run.meetingArtifacts.length > 0
       ? run.meetingArtifacts.map((artifact) => `- ${artifact}`)
       : ["- none provided"]),
-    "",
-    "## Consensus",
-    run.consensusSummary,
-    "",
-    "## Dissent",
-    run.dissentSummary,
-    "",
-    "## Recommendations",
-    ...run.recommendations.map(
-      (item) =>
-        `- **${item.theme}**: ${item.recommendation} (confidence: ${Math.round(item.confidence * 100)}%)`,
-    ),
-    "",
-    "## Full Transcript",
-    ...toTranscriptBullets(run.sharedTranscript ?? []),
-  ].join("\n");
+  );
+  sections.push("");
+  sections.push("## Full Transcript");
+  sections.push(...toTranscriptBullets(transcriptLines));
+
+  const markdownRaw = sections.join("\n");
   const target = run.targetWordCount ?? 600;
-  const markdown = trimToWordTarget(markdownRaw, target);
+  const markdown = markdownRaw;
   const plainText = trimToWordTarget(toPlainText(markdownRaw), target);
 
   return jsonOk({

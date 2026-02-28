@@ -39,6 +39,14 @@ interface RunSummary {
   agenda: string;
 }
 
+interface AgendaItemDraft {
+  id: string;
+  title: string;
+  timePercent: number;
+  desiredOutput: string;
+  questionsText: string;
+}
+
 interface RunResult {
   runId: string;
   status: string;
@@ -197,11 +205,22 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>(
     initialPersonas.filter((persona) => persona.role === "board_member").map((persona) => persona.id),
   );
-  const [agenda, setAgenda] = useState("Evaluate expansion strategy for an AI-enabled board advisory offer.");
-  const [topics, setTopics] = useState("market positioning, risk controls, operating model, talent readiness");
-  const [agendaExpanded, setAgendaExpanded] = useState(false);
-  const [suggestingTopics, setSuggestingTopics] = useState(false);
-  const [topicSuggestError, setTopicSuggestError] = useState<string | null>(null);
+  const [agendaItems, setAgendaItems] = useState<AgendaItemDraft[]>([
+    {
+      id: "agenda-item-1",
+      title: "Evaluate expansion strategy for an AI-enabled board advisory offer",
+      timePercent: 60,
+      desiredOutput: "Actionable board insights on where to focus first and major risk constraints.",
+      questionsText: "What should be prioritised in the next 90 days?\nWhich risks should be mitigated first?",
+    },
+    {
+      id: "agenda-item-2",
+      title: "Define operating model and governance for pilot delivery",
+      timePercent: 40,
+      desiredOutput: "Practical setup guidance for pilot governance, controls, and team structure.",
+      questionsText: "What governance checkpoints are mandatory?\nWhat roles should own delivery and risk?",
+    },
+  ]);
   const [meetingArtifacts, setMeetingArtifacts] = useState(
     "Board packet summary:\n- baseline operating assumptions and constraints\n- key delivery dependencies\n\nBoard packet summary:\n- current risk posture\n- control expectations",
   );
@@ -254,13 +273,39 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     return `${fallback} (HTTP ${response.status})`;
   }, []);
 
-  const topicArray = useMemo(
+  const agendaPercentTotal = useMemo(
+    () => agendaItems.reduce((sum, item) => sum + (Number.isFinite(item.timePercent) ? item.timePercent : 0), 0),
+    [agendaItems],
+  );
+
+  const agendaValidationError = useMemo(() => {
+    if (agendaItems.length === 0) {
+      return "Add at least one agenda item.";
+    }
+    if (agendaItems.some((item) => !item.title.trim())) {
+      return "Each agenda item needs a title.";
+    }
+    if (agendaPercentTotal !== 100) {
+      return `Agenda percentages must total exactly 100% (current total: ${agendaPercentTotal}%).`;
+    }
+    return null;
+  }, [agendaItems, agendaPercentTotal]);
+
+  const derivedAgenda = useMemo(
     () =>
-      topics
-        .split(",")
-        .map((item) => item.trim())
+      agendaItems
+        .map((item, index) => `${index + 1}. ${item.title.trim()}`)
+        .filter(Boolean)
+        .join(" | "),
+    [agendaItems],
+  );
+
+  const derivedTopics = useMemo(
+    () =>
+      agendaItems
+        .map((item) => item.title.trim())
         .filter(Boolean),
-    [topics],
+    [agendaItems],
   );
 
   const meetingArtifactList = useMemo(
@@ -320,38 +365,26 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     });
   }, []);
 
-  const suggestTopics = useCallback(
-    async (agendaValue: string) => {
-      const trimmedAgenda = agendaValue.trim();
-      if (!trimmedAgenda) {
-        return;
-      }
-      setTopicSuggestError(null);
-      setSuggestingTopics(true);
-      try {
-        const response = await fetch("/api/shadow-board/topics/suggest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agenda: trimmedAgenda }),
-        });
-        if (!response.ok) {
-          setTopicSuggestError("Unable to suggest topics.");
-          return;
-        }
-        const payload = (await response.json()) as { topics?: string[] };
-        if (!Array.isArray(payload.topics) || payload.topics.length === 0) {
-          setTopicSuggestError("No topics suggested.");
-          return;
-        }
-        setTopics(payload.topics.join(", "));
-      } catch {
-        setTopicSuggestError("Unable to suggest topics.");
-      } finally {
-        setSuggestingTopics(false);
-      }
-    },
-    [],
-  );
+  const updateAgendaItem = useCallback((id: string, patch: Partial<AgendaItemDraft>) => {
+    setAgendaItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }, []);
+
+  const addAgendaItem = useCallback(() => {
+    setAgendaItems((current) => [
+      ...current,
+      {
+        id: `agenda-item-${Date.now()}`,
+        title: "",
+        timePercent: 0,
+        desiredOutput: "",
+        questionsText: "",
+      },
+    ]);
+  }, []);
+
+  const removeAgendaItem = useCallback((id: string) => {
+    setAgendaItems((current) => current.filter((item) => item.id !== id));
+  }, []);
 
   const refreshDocuments = useCallback(async () => {
     const response = await fetch("/api/documents?limit=400");
@@ -524,6 +557,11 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       setError("Select at least one persona before running the shadow board.");
       return;
     }
+    if (agendaValidationError) {
+      setStatus("idle");
+      setError(agendaValidationError);
+      return;
+    }
     setStatus("running");
     setRunWarnings([]);
     setReportContent("");
@@ -531,12 +569,24 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     closeShadowStream();
 
     try {
+      const normalizedAgendaItems = agendaItems.map((item, index) => ({
+        id: item.id || `agenda-item-${index + 1}`,
+        title: item.title.trim(),
+        timePercent: Math.round(item.timePercent),
+        desiredOutput: item.desiredOutput.trim(),
+        questions: item.questionsText
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      }));
+
       const response = await fetch("/api/shadow-board/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          agenda,
-          topics: topicArray,
+          agenda: derivedAgenda,
+          topics: derivedTopics,
+          agendaItems: normalizedAgendaItems,
           personaIds: selectedPersonaIds,
           meetingId: selectedMeetingId || undefined,
           shadowSessionId: shadowSessionId || undefined,
@@ -547,7 +597,10 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           meetingArtifacts: meetingArtifactList,
           outputFormat,
           targetWordCount,
-          transcriptSeed: [`Board Chair: Agenda - ${agenda}`, `Board Chair: Focus topics - ${topicArray.join("; ")}`],
+          transcriptSeed: [
+            `Board Chair: Agenda - ${derivedAgenda}`,
+            `Board Chair: Focus topics - ${derivedTopics.join("; ")}`,
+          ],
         }),
       });
 
@@ -573,8 +626,11 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       setError("Unable to start shadow board run. Check your network and try again.");
     }
   }, [
-    agenda,
+    agendaItems,
+    agendaValidationError,
     closeShadowStream,
+    derivedAgenda,
+    derivedTopics,
     fetchReport,
     maxConversationTurns,
     meetingArtifactList,
@@ -588,7 +644,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     shadowSessionId,
     selectedPersonaIds,
     targetWordCount,
-    topicArray,
     readErrorMessage,
   ]);
 
@@ -605,17 +660,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
     setSelectedPersonaIds(personas.map((persona) => persona.id));
   }, [personas, selectedPersonaIds.length]);
-
-  useEffect(() => {
-    const agendaValue = agenda.trim();
-    if (!agendaValue) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      void suggestTopics(agendaValue);
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [agenda, suggestTopics]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -691,47 +735,83 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                 </select>
               </label>
 
-              <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
-                Agenda
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-[color:var(--ink-3)]">Long-form agenda supported.</span>
+              <div className="grid gap-2 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[color:var(--ink-1)]">Agenda Items</p>
                   <button
                     type="button"
-                    onClick={() => setAgendaExpanded((current) => !current)}
-                    className="rounded-full border border-[color:var(--line)] px-2 py-1 text-xs text-[color:var(--ink-2)]"
+                    onClick={addAgendaItem}
+                    className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] px-3 py-1.5 text-xs text-[color:var(--ink-2)]"
                   >
-                    {agendaExpanded ? "Collapse" : "Expand"}
+                    + Add agenda item
                   </button>
                 </div>
-                <textarea
-                  value={agenda}
-                  onChange={(event) => setAgenda(event.target.value)}
-                  onBlur={() => void suggestTopics(agenda)}
-                  className={`rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)] ${
-                    agendaExpanded ? "min-h-[75vh]" : "min-h-24"
-                  }`}
-                />
-              </label>
+                <p className="text-xs text-[color:var(--ink-3)]">
+                  Total: {agendaPercentTotal}% (must be exactly 100%)
+                </p>
+                {agendaItems.map((item, index) => (
+                  <div key={item.id} className="grid gap-2 rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ink-3)]">Agenda Item {index + 1}</p>
+                      {agendaItems.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => removeAgendaItem(item.id)}
+                          className="rounded-full border border-[color:var(--line)] px-2 py-0.5 text-[10px] text-[color:var(--ink-2)]"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
 
-              <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
-                Topics (comma separated)
-                <div className="flex items-center gap-2">
-                  <input
-                    value={topics}
-                    onChange={(event) => setTopics(event.target.value)}
-                    className="flex-1 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void suggestTopics(agenda)}
-                    className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] px-3 py-2 text-xs text-[color:var(--ink-2)]"
-                    disabled={suggestingTopics}
-                  >
-                    {suggestingTopics ? "Suggesting..." : "Refresh Topics"}
-                  </button>
-                </div>
-                {topicSuggestError ? <span className="text-xs text-[color:var(--warn-ink)]">{topicSuggestError}</span> : null}
-              </label>
+                    <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
+                      Topic Title
+                      <input
+                        value={item.title}
+                        onChange={(event) => updateAgendaItem(item.id, { title: event.target.value })}
+                        className="rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
+                      % of Discussion Time
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={item.timePercent}
+                        onChange={(event) =>
+                          updateAgendaItem(item.id, {
+                            timePercent: Number.parseInt(event.target.value || "0", 10) || 0,
+                          })
+                        }
+                        className="w-36 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
+                      Desired Output
+                      <textarea
+                        value={item.desiredOutput}
+                        onChange={(event) => updateAgendaItem(item.id, { desiredOutput: event.target.value })}
+                        className="min-h-20 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
+                      Specific Questions (one per line)
+                      <textarea
+                        value={item.questionsText}
+                        onChange={(event) => updateAgendaItem(item.id, { questionsText: event.target.value })}
+                        className="min-h-20 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
+                      />
+                    </label>
+                  </div>
+                ))}
+                {agendaValidationError ? (
+                  <p className="text-xs text-[color:var(--warn-ink)]">{agendaValidationError}</p>
+                ) : null}
+              </div>
 
               <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
                 Meeting Artifacts (multi-line blocks, separated by a blank line)
@@ -868,7 +948,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               <button
                 type="button"
                 onClick={() => void runShadowBoard()}
-                disabled={selectedPersonaCount === 0}
+                disabled={selectedPersonaCount === 0 || Boolean(agendaValidationError)}
                 className="btn-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50"
               >
                 {status === "running" ? "Running..." : "Run Shadow Board"}
