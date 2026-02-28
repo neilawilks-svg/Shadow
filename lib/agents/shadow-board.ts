@@ -847,8 +847,10 @@ async function gatherPersonaRagEvidence(params: {
   topics: string[];
   transcript: string[];
   documentIds: string[];
+  personaDocIds: string[];
 }): Promise<string[]> {
-  if (params.documentIds.length === 0) {
+  const combinedDocIds = Array.from(new Set([...params.personaDocIds, ...params.documentIds]));
+  if (combinedDocIds.length === 0) {
     return [];
   }
 
@@ -865,7 +867,7 @@ async function gatherPersonaRagEvidence(params: {
         .join("\n"),
       limit: 10,
       person: params.persona.name,
-      doc_ids: params.documentIds,
+      doc_ids: combinedDocIds,
     })) as {
       structuredContent?: { results?: Array<{ text?: string; source_path?: string }> };
       content?: Array<{ type?: string; text?: string }>;
@@ -1486,6 +1488,34 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       );
     }
 
+    const personaPdfDocIdsByPersonaId = new Map<string, string[]>();
+    const personasMissingPdfGrounding: string[] = [];
+    for (const persona of speakingPersonas) {
+      const profile = profileByPersonaId.get(persona.id);
+      const sourceDocIds = normalizeStringArray(profile?.sourceDocIds, 24);
+      if (sourceDocIds.length === 0) {
+        personasMissingPdfGrounding.push(persona.name);
+      }
+      personaPdfDocIdsByPersonaId.set(persona.id, sourceDocIds);
+    }
+    if (personasMissingPdfGrounding.length > 0) {
+      throw new Error(
+        `Persona PDF grounding is required but missing for: ${personasMissingPdfGrounding.join(", ")}. Rebuild profiles from persona PDFs before running.`,
+      );
+    }
+
+    for (const persona of speakingPersonas) {
+      const profile = profileByPersonaId.get(persona.id);
+      const hasPdfPath = normalizeStringArray(profile?.sourcePaths, 24).some((sourcePath) =>
+        sourcePath.toLowerCase().includes(".pdf"),
+      );
+      if (!hasPdfPath) {
+        warnings.push(
+          `${persona.name} profile has no PDF source path metadata; responses may be less directly grounded in persona PDF text.`,
+        );
+      }
+    }
+
     const docs = (await Promise.all(documentIds.map((id) => getDocumentById(id)))).filter(
       (doc): doc is NonNullable<typeof doc> => Boolean(doc),
     );
@@ -1567,6 +1597,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       topics: topicList,
       transcript: sharedTranscript,
       documentIds,
+      personaDocIds: personaPdfDocIdsByPersonaId.get(opener.id) ?? [],
     });
 
     const openerArtifacts = [...baseArtifacts, ...openerEvidence].slice(0, 100);
@@ -1664,6 +1695,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
             topics: topicList,
             transcript: sharedTranscript,
             documentIds,
+            personaDocIds: personaPdfDocIdsByPersonaId.get(persona.id) ?? [],
           });
           evidenceByPersonaId.set(persona.id, evidence);
 
