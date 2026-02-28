@@ -56,6 +56,11 @@ interface RunResult {
   skippedPersonaIds?: string[];
   warnings?: string[];
   sharedTranscript?: string[];
+  activeStage?: "planning" | "rag" | "bidding" | "generation" | "persisting";
+  lastHeartbeatAt?: string;
+  lastCompletedTurn?: number;
+  failureCode?: string;
+  failureDetail?: string;
   turnBids?: Array<{
     personaId: string;
     urgency_1_to_10: number;
@@ -81,7 +86,15 @@ interface RunResult {
 interface ShadowBoardRunEvent {
   eventId: string;
   runId: string;
-  type: "run_started" | "turn_started" | "turn_committed" | "run_warning" | "run_completed" | "run_failed";
+  type:
+    | "run_started"
+    | "run_heartbeat"
+    | "run_stage"
+    | "turn_started"
+    | "turn_committed"
+    | "run_warning"
+    | "run_completed"
+    | "run_failed";
   createdAt: string;
   payload?: {
     message?: string;
@@ -106,6 +119,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const streamRef = useRef<EventSource | null>(null);
   const missingRunPollCountRef = useRef(0);
   const lastRunEventAtRef = useRef<number>(0);
+  const tickInFlightRef = useRef(false);
   const isMorganPersona = (persona: Persona) => persona.name.trim().toLowerCase() === "morgan";
   const [personas] = useState<Persona[]>(initialPersonas);
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>(
@@ -363,6 +377,18 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     return { run: (await response.json()) as RunResult, status: response.status };
   }, []);
 
+  const tickRun = useCallback(async (runId: string): Promise<void> => {
+    if (tickInFlightRef.current) {
+      return;
+    }
+    tickInFlightRef.current = true;
+    try {
+      await fetch(`/api/shadow-board/runs/${runId}/tick`, { method: "POST" });
+    } finally {
+      tickInFlightRef.current = false;
+    }
+  }, []);
+
   const downloadTranscriptPdf = useCallback(async () => {
     setError(null);
     const runId = runResult?.runId ?? runs[0]?.runId;
@@ -420,6 +446,13 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               }
               return [...current, warningMessage];
             });
+          }
+
+          if (payload.type === "run_failed") {
+            const detail = payload.payload?.message;
+            if (detail) {
+              setError(detail);
+            }
           }
 
           if (payload.type === "run_completed" || payload.type === "run_failed") {
@@ -497,7 +530,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       setRunResult(payload);
       setStatus(payload.status);
       setRunWarnings(payload.warnings ?? []);
-      if (payload.status === "running") {
+      if (payload.status === "running" || payload.status === "queued") {
         openShadowStream(payload.runId);
       }
 
@@ -552,13 +585,16 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   }, [refreshDocuments, refreshRuns, refreshSessions]);
 
   useEffect(() => {
-    if (!runResult?.runId || status !== "running") {
+    if (!runResult?.runId || (status !== "running" && status !== "queued")) {
       return;
     }
 
     const runId = runResult.runId;
     const interval = window.setInterval(() => {
       void (async () => {
+        if (status === "running" || status === "queued") {
+          await tickRun(runId);
+        }
         const result = await fetchRunById(runId);
         if (result.status === 404) {
           const recentlyReceivedEvent = Date.now() - lastRunEventAtRef.current < 45_000;
@@ -567,9 +603,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           }
           if (missingRunPollCountRef.current >= 24) {
             setStatus("failed");
-            setError(
-              "Run tracking was lost (HTTP 404). This usually happens after a deployment or server restart. Please start a new run.",
-            );
+            setError("Run state unavailable after repeated retries. Please restart the run.");
             closeShadowStream();
           }
           return;
@@ -582,6 +616,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         }
         setRunResult(latest);
         setStatus(latest.status);
+        if (latest.status === "failed" && latest.failureCode) {
+          setError(`${latest.failureCode}: ${latest.failureDetail ?? "Run failed."}`);
+        }
         if (Array.isArray(latest.warnings)) {
           setRunWarnings(latest.warnings);
         }
@@ -595,7 +632,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     return () => {
       window.clearInterval(interval);
     };
-  }, [closeShadowStream, fetchRunById, refreshRuns, runResult?.runId, status]);
+  }, [closeShadowStream, fetchRunById, refreshRuns, runResult?.runId, status, tickRun]);
 
   useEffect(() => {
     return () => {
@@ -779,10 +816,13 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                   <input
                     type="range"
                     min={3}
-                    max={80}
+                    max={30}
                     value={maxConversationTurns}
                     onChange={(event) => setMaxConversationTurns(Number(event.target.value))}
                   />
+                  <span className="text-[10px] text-[color:var(--ink-3)]">
+                    Temporary reliability cap while long-run stabilization is in progress.
+                  </span>
                 </label>
                 <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
                   Randomness: {randomness.toFixed(2)}
@@ -881,6 +921,20 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
             ) : (
               <div className="space-y-3">
                 <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3 text-xs text-[color:var(--ink-2)]">
+                  <p>
+                    Progress: {runResult.lastCompletedTurn ?? 0} / {maxConversationTurns} turns
+                  </p>
+                  <p>Stage: {runResult.activeStage ?? "planning"}</p>
+                  <p>
+                    Last heartbeat:{" "}
+                    {runResult.lastHeartbeatAt ? new Date(runResult.lastHeartbeatAt).toLocaleTimeString() : "n/a"}
+                  </p>
+                  {runResult.failureCode ? (
+                    <p>
+                      Failure: {runResult.failureCode}
+                      {runResult.failureDetail ? ` - ${runResult.failureDetail}` : ""}
+                    </p>
+                  ) : null}
                   <p>
                     First speaker:{" "}
                     {runResult.firstSpeakerPersonaId

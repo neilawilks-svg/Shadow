@@ -36,6 +36,7 @@ const BLOB_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN ?? "";
 const BLOB_BASE_URL = "https://blob.vercel-storage.com";
 const SHADOW_STATE_PREFIX = "state/shadow-board";
 const SHADOW_RUN_FILE_PREFIX = "shadow-board-run";
+const SHADOW_RUN_EVENTS_FILE_PREFIX = "shadow-board-run-events";
 
 type BoardMemberAgentProfile = {
   personaId: string;
@@ -419,12 +420,30 @@ export async function listShadowBoardRuns(limit = 100): Promise<ShadowBoardRun[]
 }
 
 export async function appendShadowBoardRunEvent(event: ShadowBoardRunEvent): Promise<void> {
-  const events = await readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
+  const [events, perRunEvents] = await Promise.all([
+    readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []),
+    readShadowStateJson<ShadowBoardRunEvent[]>(`${SHADOW_RUN_EVENTS_FILE_PREFIX}-${event.runId}.json`, []),
+  ]);
   events.push(event);
-  await writeShadowStateJson(SHADOW_BOARD_EVENTS_FILE, events.slice(-5000));
+  perRunEvents.push(event);
+  await Promise.all([
+    writeShadowStateJson(SHADOW_BOARD_EVENTS_FILE, events.slice(-5000)),
+    writeShadowStateJson(`${SHADOW_RUN_EVENTS_FILE_PREFIX}-${event.runId}.json`, perRunEvents.slice(-5000)),
+  ]);
 }
 
 export async function getShadowBoardRunEvents(runId: string, limit = 500): Promise<ShadowBoardRunEvent[]> {
+  const perRunEvents = await readShadowStateJson<ShadowBoardRunEvent[]>(
+    `${SHADOW_RUN_EVENTS_FILE_PREFIX}-${runId}.json`,
+    [],
+  );
+  if (perRunEvents.length > 0) {
+    if (perRunEvents.length <= limit) {
+      return perRunEvents;
+    }
+    return perRunEvents.slice(perRunEvents.length - Math.max(1, limit));
+  }
+
   const events = await readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
   const filtered = events.filter((event) => event.runId === runId);
   if (filtered.length <= limit) {

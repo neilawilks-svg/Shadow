@@ -25,6 +25,7 @@ import {
   createShadowBoardRun,
   getBoardMemberProfilePack,
   getDocumentById,
+  getShadowBoardRun,
   getPersonas,
   isBoardMemberProfilePackStale,
   updateShadowBoardRun,
@@ -784,6 +785,15 @@ function toTurnTranscriptBlock(turnNumber: number, comment: string): string {
   return [`[Turn ${turnNumber}] ${lines[0]}`, ...lines.slice(1)].join("\n");
 }
 
+function extractTurnCommentFromTranscriptBlock(transcriptLine: string): string {
+  const lines = transcriptLine.split(/\r?\n/);
+  if (lines.length === 0) {
+    return transcriptLine;
+  }
+  const firstLine = lines[0]?.replace(/^\[Turn\s+\d+\]\s*/i, "") ?? "";
+  return [firstLine, ...lines.slice(1)].join("\n").trim();
+}
+
 async function rebuildMemberAgentProfiles(force: boolean): Promise<boolean> {
   const scriptPath = path.join(process.cwd(), "scripts", "build_member_agent_profiles.py");
   const pythonCandidates = ["python3", "python"];
@@ -839,6 +849,17 @@ async function publishRunEvent(
     type,
     createdAt: new Date().toISOString(),
     payload: options.includeRun ? { ...payload, run } : { ...payload },
+  });
+}
+
+async function publishRunStage(run: ShadowBoardRun, stage: NonNullable<ShadowBoardRun["activeStage"]>): Promise<void> {
+  run.activeStage = stage;
+  run.lastHeartbeatAt = new Date().toISOString();
+  await updateShadowBoardRun(run);
+  await publishRunEvent(run, "run_stage", { message: `Stage: ${stage}` });
+  await publishRunEvent(run, "run_heartbeat", {
+    message: `Heartbeat at ${run.lastHeartbeatAt}`,
+    turnIndex: run.lastCompletedTurn,
   });
 }
 
@@ -1464,7 +1485,7 @@ function buildInitialRunRecord(input: RunInput): ShadowBoardRun {
     targetWordCount: Math.max(150, Math.min(4000, input.targetWordCount ?? 600)),
     sharedTranscript: normalizeStringArray(input.transcriptSeed, 80),
     turnMeta: [],
-    status: "running",
+    status: "queued",
     startedAt: new Date().toISOString(),
     outputs: [],
     turnBids: [],
@@ -1473,11 +1494,399 @@ function buildInitialRunRecord(input: RunInput): ShadowBoardRun {
     dissentSummary: "",
     skippedPersonaIds: [],
     warnings: [],
+    activeStage: "planning",
+    lastHeartbeatAt: new Date().toISOString(),
+    lastCompletedTurn: 0,
+    attempt: 0,
+    version: 1,
+    jobId: runId,
   };
 }
 
 function scheduleShadowRun(task: () => Promise<void>): void {
   void task();
+}
+
+function inferFailureCode(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("timed out")) {
+    return "MODEL_TIMEOUT";
+  }
+  if (message.includes("rag")) {
+    return "RAG_TIMEOUT";
+  }
+  if (message.includes("persist")) {
+    return "PERSIST_TIMEOUT";
+  }
+  return "RUN_EXECUTION_ERROR";
+}
+
+export async function tickShadowBoardRun(runId: string): Promise<ShadowBoardRun | null> {
+  const run = await getShadowBoardRun(runId);
+  if (!run) {
+    return null;
+  }
+  if (run.status === "completed" || run.status === "failed") {
+    return run;
+  }
+
+  const controls = normalizeShadowBoardControls({
+    reasoningLevel: run.controls?.reasoningLevel,
+    maxConversationTurns: run.controls?.maxConversationTurns,
+    randomness: run.controls?.randomness,
+  });
+  const reasoningLevel = controls.reasoningLevel;
+  const maxConversationTurns = controls.maxConversationTurns;
+  const randomness = controls.randomness;
+
+  try {
+    run.status = "running";
+    run.controls = controls;
+    run.attempt = (run.attempt ?? 0) + 1;
+    run.lastHeartbeatAt = new Date().toISOString();
+    run.version = (run.version ?? 0) + 1;
+    await updateShadowBoardRun(run);
+    await publishRunStage(run, "planning");
+
+    const selectedPersonas = (await getPersonas()).filter((persona) => run.personaIds.includes(persona.id));
+    if (selectedPersonas.length === 0) {
+      throw new Error("No speaking personas selected for shadow board run.");
+    }
+
+    const warnings = [...(run.warnings ?? [])];
+    const { pack } = await loadProfilePackWithRefresh(warnings);
+    if (!pack || pack.profiles.length === 0) {
+      throw new Error("Board-member agent profiles are missing.");
+    }
+
+    const profileByPersonaId = mapProfilesByPersonaId(pack.profiles);
+    const skippedPersonas = selectedPersonas.filter((persona) => !profileByPersonaId.has(persona.id));
+    const speakingPersonas = selectedPersonas.filter((persona) => profileByPersonaId.has(persona.id));
+    for (const skipped of skippedPersonas) {
+      const message = `Skipped ${skipped.name}: missing generated member profile.`;
+      if (!warnings.includes(message)) {
+        warnings.push(message);
+      }
+    }
+    if (speakingPersonas.length < MIN_SPEAKING_QUORUM) {
+      throw new Error(
+        `Insufficient speaking quorum after profile validation: ${speakingPersonas.length} available; requires at least ${MIN_SPEAKING_QUORUM}.`,
+      );
+    }
+
+    const personaPdfDocIdsByPersonaId = new Map<string, string[]>();
+    const personasMissingPdfGrounding: string[] = [];
+    for (const persona of speakingPersonas) {
+      const profile = profileByPersonaId.get(persona.id);
+      const sourceDocIds = normalizeStringArray(profile?.sourceDocIds, 24);
+      if (sourceDocIds.length === 0) {
+        personasMissingPdfGrounding.push(persona.name);
+      }
+      personaPdfDocIdsByPersonaId.set(persona.id, sourceDocIds);
+    }
+    if (personasMissingPdfGrounding.length > 0) {
+      throw new Error(
+        `Persona PDF grounding is required but missing for: ${personasMissingPdfGrounding.join(", ")}.`,
+      );
+    }
+
+    const documentIds = normalizeStringArray(run.documentIds, 300);
+    const meetingArtifacts = normalizeStringArray(run.meetingArtifacts, 40);
+    const docs = (await Promise.all(documentIds.map((id) => getDocumentById(id)))).filter(
+      (doc): doc is NonNullable<typeof doc> => Boolean(doc),
+    );
+    const baseArtifacts = [...meetingArtifacts, ...docs.map((doc) => `${doc.title} (${doc.sourcePath})`)].slice(0, 80);
+
+    const sharedTranscript = [...(run.sharedTranscript ?? [])];
+    if (sharedTranscript.length === 0) {
+      sharedTranscript.push(`Board Chair: Agenda - ${run.agenda}`);
+      sharedTranscript.push(`Board Chair: Focus topics - ${(run.topics ?? []).join("; ")}`);
+      if (baseArtifacts.length > 0) {
+        sharedTranscript.push(`Board Chair: ${baseArtifacts.length} supporting artifacts were reviewed.`);
+      }
+    }
+
+    const normalizedAgendaItems = normalizeAgendaItems({
+      agenda: run.agenda,
+      topics: run.topics,
+      agendaItems: run.agendaItems,
+    });
+    const plannedAgendaItems = allocateTurnsForAgendaItems(maxConversationTurns, normalizedAgendaItems);
+    const turnSchedule = buildAgendaTurnSchedule(plannedAgendaItems, maxConversationTurns);
+    const topicList = plannedAgendaItems.map((item) => item.title);
+    run.agendaItems = plannedAgendaItems;
+    run.skippedPersonaIds = skippedPersonas.map((persona) => persona.id);
+    run.warnings = Array.from(new Set(warnings));
+    run.meetingArtifacts = baseArtifacts;
+    run.sharedTranscript = sharedTranscript;
+
+    const turnMeta = [...(run.turnMeta ?? [])];
+    const allBids = [...(run.turnBids ?? [])];
+    const turnIndex = turnMeta.length;
+    run.lastCompletedTurn = turnMeta.length;
+
+    if (turnIndex >= maxConversationTurns) {
+      run.status = "completed";
+      run.finishedAt = run.finishedAt ?? new Date().toISOString();
+      run.outputs = [];
+      run.recommendations = [];
+      run.consensusSummary = "";
+      run.dissentSummary = "";
+      run.activeStage = "persisting";
+      run.lastHeartbeatAt = new Date().toISOString();
+      await updateShadowBoardRun(run);
+      await publishRunEvent(run, "run_completed", { message: "Shadow board run completed." }, { includeRun: false });
+      return run;
+    }
+
+    const turnCounts = new Map<string, number>();
+    const lastSpokenAt = new Map<string, number>();
+    const turnsByPersona = new Map<string, string[]>();
+    for (const persona of speakingPersonas) {
+      turnCounts.set(persona.id, 0);
+      turnsByPersona.set(persona.id, []);
+    }
+
+    const transcriptByTurnIndex = new Map<number, string>();
+    for (const line of sharedTranscript) {
+      const match = line.match(/^\[Turn\s+(\d+)\]\s+/i);
+      if (!match) {
+        continue;
+      }
+      const number = Number(match[1]);
+      if (Number.isFinite(number)) {
+        transcriptByTurnIndex.set(number, line);
+      }
+    }
+
+    for (const meta of turnMeta) {
+      if (!meta.speakerPersonaId) {
+        continue;
+      }
+      turnCounts.set(meta.speakerPersonaId, (turnCounts.get(meta.speakerPersonaId) ?? 0) + 1);
+      lastSpokenAt.set(meta.speakerPersonaId, meta.turnIndex - 1);
+      const line = transcriptByTurnIndex.get(meta.turnIndex);
+      if (!line) {
+        continue;
+      }
+      const existing = turnsByPersona.get(meta.speakerPersonaId) ?? [];
+      existing.push(extractTurnCommentFromTranscriptBlock(line));
+      turnsByPersona.set(meta.speakerPersonaId, existing);
+    }
+
+    const activeAgendaItem = turnSchedule[turnIndex] ?? plannedAgendaItems[turnIndex % plannedAgendaItems.length];
+    const topic = activeAgendaItem?.title ?? topicList[turnIndex % topicList.length] ?? run.agenda;
+    const agendaItemContext = activeAgendaItem
+      ? buildAgendaItemPromptContext(activeAgendaItem)
+      : "Current agenda item: general discussion";
+
+    await publishRunEvent(run, "turn_started", {
+      turnIndex: turnIndex + 1,
+      topic,
+    });
+
+    let speaker: PersonaProfile | undefined;
+    let selectedBid: BoardTurnBid | null = null;
+
+    if (turnIndex === 0) {
+      const opener = run.firstSpeakerPersonaId
+        ? speakingPersonas.find((persona) => persona.id === run.firstSpeakerPersonaId)
+        : speakingPersonas[Math.floor(Math.random() * speakingPersonas.length)] ?? speakingPersonas[0];
+      if (!opener) {
+        throw new Error("Unable to select opening speaker.");
+      }
+      speaker = opener;
+      run.firstSpeakerPersonaId = opener.id;
+      selectedBid = {
+        personaId: opener.id,
+        urgency_1_to_10: 10,
+        shouldSpeak: true,
+        proposedComment: `${opener.name} opens the meeting.`,
+        reason: `${opener.name} opening turn`,
+        confidence: 0.8,
+        citations: [],
+      };
+    } else {
+      await publishRunStage(run, "rag");
+      const evidenceByPersonaId = new Map<string, string[]>();
+      const bids = await Promise.all(
+        speakingPersonas.map(async (persona) => {
+          const profile = profileByPersonaId.get(persona.id);
+          if (!profile) {
+            return null;
+          }
+          const evidence = await withTimeout(
+            gatherPersonaRagEvidence({
+              persona,
+              topic,
+              agenda: run.agenda,
+              topics: topicList,
+              transcript: sharedTranscript,
+              documentIds,
+              personaDocIds: personaPdfDocIdsByPersonaId.get(persona.id) ?? [],
+            }),
+            20_000,
+            "rag_search",
+          );
+          evidenceByPersonaId.set(persona.id, evidence);
+          const artifacts = [...baseArtifacts, ...evidence].slice(0, 100);
+          const personaArtifacts = selectPersonaArtifacts(persona, artifacts);
+          return generatePersonaBid({
+            runId: run.runId,
+            shadowSessionId: run.shadowSessionId ?? `${DEFAULT_SHADOW_SESSION_ID}-${run.runId}`,
+            turnIndex,
+            persona,
+            profile,
+            topic,
+            agendaItemContext,
+            agenda: run.agenda,
+            topics: topicList,
+            transcript: sharedTranscript,
+            artifacts,
+            personaArtifacts,
+            reasoningLevel,
+            randomness,
+          });
+        }),
+      );
+      await publishRunStage(run, "bidding");
+      const validBids = bids.filter((bid): bid is BoardTurnBid => Boolean(bid));
+      allBids.push(...validBids);
+      selectedBid = selectNextSpeakerBid(validBids, {
+        turnCounts,
+        lastSpokenAt,
+        turnIndex,
+      });
+      speaker = selectedBid ? speakingPersonas.find((persona) => persona.id === selectedBid!.personaId) : undefined;
+      if (!speaker) {
+        speaker = [...speakingPersonas]
+          .sort((a, b) => {
+            const byTurns = (turnCounts.get(a.id) ?? 0) - (turnCounts.get(b.id) ?? 0);
+            if (byTurns !== 0) {
+              return byTurns;
+            }
+            return (lastSpokenAt.get(a.id) ?? -1) - (lastSpokenAt.get(b.id) ?? -1);
+          })
+          .at(0);
+      }
+    }
+
+    if (!speaker) {
+      throw new Error("No speaker available for turn generation.");
+    }
+    const speakerProfile = profileByPersonaId.get(speaker.id);
+    if (!speakerProfile) {
+      throw new Error(`Profile missing for speaker ${speaker.name}.`);
+    }
+
+    await publishRunStage(run, "generation");
+    const speakerEvidence = await withTimeout(
+      gatherPersonaRagEvidence({
+        persona: speaker,
+        topic,
+        agenda: run.agenda,
+        topics: topicList,
+        transcript: sharedTranscript,
+        documentIds,
+        personaDocIds: personaPdfDocIdsByPersonaId.get(speaker.id) ?? [],
+      }),
+      20_000,
+      "rag_search_speaker",
+    );
+    const speakerArtifacts = [...baseArtifacts, ...speakerEvidence].slice(0, 100);
+    const speakerPersonaArtifacts = selectPersonaArtifacts(speaker, speakerArtifacts);
+    const priorSpeakerTurns = turnsByPersona.get(speaker.id) ?? [];
+    const response = await generatePersonaComment({
+      runId: run.runId,
+      workflowName: turnIndex === 0 ? "shadow_board_opening_turn" : "shadow_board_member_speak",
+      shadowSessionId: run.shadowSessionId ?? `${DEFAULT_SHADOW_SESSION_ID}-${run.runId}`,
+      turnIndex,
+      persona: speaker,
+      profile: speakerProfile,
+      topic,
+      agendaItemContext,
+      agenda: run.agenda,
+      topics: topicList,
+      transcript: sharedTranscript,
+      artifacts: speakerArtifacts,
+      personaArtifacts: speakerPersonaArtifacts,
+      reasoningLevel,
+      randomness,
+      selectedBid: selectedBid ?? undefined,
+      personaTurnHistory: priorSpeakerTurns,
+    });
+
+    await publishRunStage(run, "persisting");
+    const transcriptLine = toTurnTranscriptBlock(turnIndex + 1, response.comment);
+    sharedTranscript.push(transcriptLine);
+    if (sharedTranscript.length > MAX_TRANSCRIPT_LINES) {
+      sharedTranscript.splice(0, sharedTranscript.length - MAX_TRANSCRIPT_LINES);
+    }
+
+    if (response.repetitionWarning) {
+      const warning = response.repetitionWarning;
+      if (!run.warnings?.includes(warning)) {
+        run.warnings = [...(run.warnings ?? []), warning];
+      }
+      await publishRunEvent(run, "run_warning", { message: warning });
+    }
+
+    turnMeta.push({
+      turnIndex: turnIndex + 1,
+      agendaItemId: activeAgendaItem?.id ?? "agenda-item-1",
+      topic,
+      speakerPersonaId: speaker.id,
+    });
+
+    run.sharedTranscript = [...sharedTranscript];
+    run.turnMeta = [...turnMeta];
+    run.turnBids = [...allBids];
+    run.lastCompletedTurn = turnIndex + 1;
+    run.lastHeartbeatAt = new Date().toISOString();
+    run.activeStage = "persisting";
+
+    if (run.lastCompletedTurn >= maxConversationTurns) {
+      run.status = "completed";
+      run.finishedAt = new Date().toISOString();
+      run.outputs = [];
+      run.recommendations = [];
+      run.consensusSummary = "";
+      run.dissentSummary = "";
+    }
+
+    await updateShadowBoardRun(run);
+    await publishRunEvent(run, "turn_committed", {
+      turnIndex: turnIndex + 1,
+      topic,
+      speakerPersonaId: speaker.id,
+      speakerName: speaker.name,
+      transcriptLine,
+    });
+    await publishRunEvent(run, "run_heartbeat", {
+      message: "Turn committed.",
+      turnIndex: run.lastCompletedTurn,
+      topic,
+      speakerPersonaId: speaker.id,
+      speakerName: speaker.name,
+    });
+
+    if (run.status === "completed") {
+      await publishRunEvent(run, "run_completed", { message: "Shadow board run completed." }, { includeRun: false });
+    }
+
+    return run;
+  } catch (error) {
+    run.status = "failed";
+    run.finishedAt = new Date().toISOString();
+    run.failureCode = inferFailureCode(error);
+    run.failureDetail = error instanceof Error ? error.message : "Unknown shadow board failure";
+    run.error = run.failureDetail;
+    run.activeStage = "persisting";
+    run.lastHeartbeatAt = new Date().toISOString();
+    await updateShadowBoardRun(run);
+    await publishRunEvent(run, "run_failed", { message: run.failureDetail }, { includeRun: false });
+    return run;
+  }
 }
 
 async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput): Promise<ShadowBoardRun> {
@@ -1940,7 +2349,7 @@ export async function startShadowBoardRunAsync(input: RunInput): Promise<ShadowB
   );
 
   scheduleShadowRun(async () => {
-    await executeShadowBoardRun(runRecord, input);
+    await tickShadowBoardRun(runRecord.runId);
   });
 
   return runRecord;

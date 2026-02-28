@@ -239,6 +239,14 @@ export interface ShadowBoardRun {
   targetWordCount?: number;
   sharedTranscript?: string[];
   turnMeta?: ShadowBoardTurnMeta[];
+  activeStage?: "planning" | "rag" | "bidding" | "generation" | "persisting";
+  lastHeartbeatAt?: string;
+  lastCompletedTurn?: number;
+  failureCode?: string;
+  failureDetail?: string;
+  attempt?: number;
+  version?: number;
+  jobId?: string;
   firstSpeakerPersonaId?: string;
   skippedPersonaIds?: string[];
   warnings?: string[];
@@ -255,6 +263,8 @@ export interface ShadowBoardRun {
 
 export type ShadowBoardRunEventType =
   | "run_started"
+  | "run_heartbeat"
+  | "run_stage"
   | "turn_started"
   | "turn_committed"
   | "run_warning"

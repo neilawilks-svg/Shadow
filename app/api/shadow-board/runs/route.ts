@@ -26,7 +26,7 @@ const schema = z
   shadowSessionId: z.string().min(1).max(120).optional(),
   documentIds: z.array(z.string()).max(100).optional().default([]),
   reasoningLevel: z.number().min(1).max(10).optional().default(6),
-  maxConversationTurns: z.number().int().min(3).max(80).optional().default(24),
+  maxConversationTurns: z.number().int().min(3).max(30).optional().default(24),
   randomness: z.number().min(0).max(1).optional().default(0.2),
   meetingArtifacts: z.array(z.string()).max(24).optional().default([]),
   outputFormat: z.enum(["markdown", "plain_text"]).optional().default("markdown"),
