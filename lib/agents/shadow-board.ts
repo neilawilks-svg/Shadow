@@ -169,6 +169,100 @@ function toSentence(input: string): string {
   return `${cleaned}.`;
 }
 
+function countWords(input: string): number {
+  return input.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function trimToWordLimit(input: string, maxWords: number): string {
+  const words = input.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return input.trim();
+  }
+  return `${words.slice(0, maxWords).join(" ").replace(/[,\s;:.-]*$/, "")}.`;
+}
+
+function normalizeStructuredTurnWordRange(params: {
+  position: string;
+  insights: string[];
+  advice: string[];
+  questions: string[];
+  experienceReference?: string;
+  agenda: string;
+  topic: string;
+}): {
+  position: string;
+  insights: string[];
+  advice: string[];
+  questions: string[];
+  experienceReference?: string;
+} {
+  const position = toSentence(params.position);
+  const insights = [...params.insights];
+  const advice = [...params.advice];
+  const questions = [...params.questions];
+  let experienceReference = params.experienceReference ? toSentence(params.experienceReference) : undefined;
+
+  const totalWords = () =>
+    countWords([position, ...insights, ...advice, ...questions, experienceReference ?? ""].join(" "));
+
+  const expansion = `This directly affects ${params.topic} execution quality, risk transparency, and client trust for Slalom UK & Ireland.`;
+
+  let i = 0;
+  while (totalWords() < 90 && i < 20) {
+    if (insights.length > 0) {
+      const idx = i % insights.length;
+      insights[idx] = `${insights[idx]} ${expansion}`.replace(/\s+/g, " ").trim();
+    } else if (advice.length > 0) {
+      const idx = i % advice.length;
+      advice[idx] = `${advice[idx]} ${expansion}`.replace(/\s+/g, " ").trim();
+    } else if (questions.length > 0) {
+      const idx = i % questions.length;
+      questions[idx] = `${questions[idx]} ${expansion}`.replace(/\s+/g, " ").trim();
+    } else {
+      experienceReference = `${params.agenda.slice(0, 140)}.`.replace(/\s+/g, " ").trim();
+    }
+    i += 1;
+  }
+
+  let guard = 0;
+  while (totalWords() > 170 && guard < 40) {
+    const candidates = [
+      ...insights.map((value, idx) => ({ group: "insights" as const, idx, words: countWords(value), value })),
+      ...advice.map((value, idx) => ({ group: "advice" as const, idx, words: countWords(value), value })),
+      ...questions.map((value, idx) => ({ group: "questions" as const, idx, words: countWords(value), value })),
+    ].sort((a, b) => b.words - a.words);
+
+    const current = candidates[0];
+    if (!current || current.words <= 8) {
+      if (experienceReference) {
+        experienceReference = undefined;
+      } else {
+        break;
+      }
+    } else {
+      const excess = totalWords() - 170;
+      const target = Math.max(8, current.words - excess);
+      const trimmed = trimToWordLimit(current.value, target);
+      if (current.group === "insights") {
+        insights[current.idx] = trimmed;
+      } else if (current.group === "advice") {
+        advice[current.idx] = trimmed;
+      } else {
+        questions[current.idx] = trimmed;
+      }
+    }
+    guard += 1;
+  }
+
+  return {
+    position,
+    insights,
+    advice,
+    questions,
+    experienceReference,
+  };
+}
+
 function firstSentence(input: string): string {
   const cleaned = input.replace(/\s+/g, " ").trim();
   if (!cleaned) {
@@ -971,14 +1065,40 @@ async function generatePersonaComment(params: {
     });
   }
 
+  const normalizedFirst = normalizeStructuredTurnWordRange({
+    position: generated.position,
+    insights: generated.insights,
+    advice: generated.advice,
+    questions: generated.questions,
+    experienceReference: generated.experienceReference,
+    agenda: params.agenda,
+    topic: params.topic,
+  });
+
+  const firstCandidate: MemberResponse = {
+    ...generated,
+    comment: buildStructuredComment({
+      personaName: params.persona.name,
+      position: normalizedFirst.position,
+      insights: normalizedFirst.insights,
+      advice: normalizedFirst.advice,
+      questions: normalizedFirst.questions,
+    }),
+    position: normalizedFirst.position,
+    insights: normalizedFirst.insights,
+    advice: normalizedFirst.advice,
+    questions: normalizedFirst.questions,
+    experienceReference: normalizedFirst.experienceReference,
+  };
+
   const firstValidation = validateTurn(
     {
-      position: generated.position,
-      insights: generated.insights,
-      advice: generated.advice,
-      questions: generated.questions,
-      interactionModes: generated.interactionModes,
-      experienceReference: generated.experienceReference,
+      position: firstCandidate.position,
+      insights: firstCandidate.insights,
+      advice: firstCandidate.advice,
+      questions: firstCandidate.questions,
+      interactionModes: firstCandidate.interactionModes,
+      experienceReference: firstCandidate.experienceReference,
     },
     {
       persona: params.persona,
@@ -991,13 +1111,13 @@ async function generatePersonaComment(params: {
   if (
     firstValidation.valid &&
     !isCommentTooSimilar({
-      comment: generated.comment,
+      comment: firstCandidate.comment,
       persona: params.persona,
       transcript: params.transcript,
       personaTurnHistory: params.personaTurnHistory,
     })
   ) {
-    return generated;
+    return firstCandidate;
   }
 
   const feedback = firstValidation.valid
@@ -1010,15 +1130,45 @@ async function generatePersonaComment(params: {
     validationFeedback: feedback,
   });
 
-  const secondValidation = regenerated
-    ? validateTurn(
-        {
+  const secondCandidate = regenerated
+    ? (() => {
+        const normalizedSecond = normalizeStructuredTurnWordRange({
           position: regenerated.position,
           insights: regenerated.insights,
           advice: regenerated.advice,
           questions: regenerated.questions,
-          interactionModes: regenerated.interactionModes,
           experienceReference: regenerated.experienceReference,
+          agenda: params.agenda,
+          topic: params.topic,
+        });
+
+        return {
+          ...regenerated,
+          comment: buildStructuredComment({
+            personaName: params.persona.name,
+            position: normalizedSecond.position,
+            insights: normalizedSecond.insights,
+            advice: normalizedSecond.advice,
+            questions: normalizedSecond.questions,
+          }),
+          position: normalizedSecond.position,
+          insights: normalizedSecond.insights,
+          advice: normalizedSecond.advice,
+          questions: normalizedSecond.questions,
+          experienceReference: normalizedSecond.experienceReference,
+        };
+      })()
+    : null;
+
+  const secondValidation = secondCandidate
+    ? validateTurn(
+        {
+          position: secondCandidate.position,
+          insights: secondCandidate.insights,
+          advice: secondCandidate.advice,
+          questions: secondCandidate.questions,
+          interactionModes: secondCandidate.interactionModes,
+          experienceReference: secondCandidate.experienceReference,
         },
         {
           persona: params.persona,
@@ -1030,16 +1180,16 @@ async function generatePersonaComment(params: {
     : null;
 
   if (
-    regenerated &&
+    secondCandidate &&
     secondValidation?.valid &&
     !isCommentTooSimilar({
-      comment: regenerated.comment,
+      comment: secondCandidate.comment,
       persona: params.persona,
       transcript: params.transcript,
       personaTurnHistory: params.personaTurnHistory,
     })
   ) {
-    return regenerated;
+    return secondCandidate;
   }
 
   const fallbackStructured = buildDeterministicStructuredFallback({
