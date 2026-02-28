@@ -35,6 +35,7 @@ const BOARD_MEMBER_PROFILE_SOURCE_DIR = path.join(process.cwd(), "local", "board
 const BLOB_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN ?? "";
 const BLOB_BASE_URL = "https://blob.vercel-storage.com";
 const SHADOW_STATE_PREFIX = "state/shadow-board";
+const SHADOW_RUN_FILE_PREFIX = "shadow-board-run";
 
 type BoardMemberAgentProfile = {
   personaId: string;
@@ -374,7 +375,10 @@ export async function updateInterviewSession(updated: PersonaInterviewSession): 
 export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
   const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
   runs.unshift(run);
-  await writeShadowStateJson(SHADOW_BOARD_FILE, runs);
+  await Promise.all([
+    writeShadowStateJson(SHADOW_BOARD_FILE, runs),
+    writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run),
+  ]);
 }
 
 export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
@@ -390,10 +394,21 @@ export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
   if (!found) {
     next.unshift(run);
   }
-  await writeShadowStateJson(SHADOW_BOARD_FILE, next);
+  await Promise.all([
+    writeShadowStateJson(SHADOW_BOARD_FILE, next),
+    writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run),
+  ]);
 }
 
 export async function getShadowBoardRun(runId: string): Promise<ShadowBoardRun | undefined> {
+  const runFromSingleFile = await readShadowStateJson<ShadowBoardRun | null>(
+    `${SHADOW_RUN_FILE_PREFIX}-${runId}.json`,
+    null,
+  );
+  if (runFromSingleFile && runFromSingleFile.runId === runId) {
+    return runFromSingleFile;
+  }
+
   const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
   return runs.find((run) => run.runId === runId);
 }
