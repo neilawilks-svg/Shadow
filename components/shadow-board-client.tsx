@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { CostPanel } from "@/components/cost-panel";
@@ -52,13 +52,9 @@ interface RunResult {
   status: string;
   agenda: string;
   topics: string[];
-  outputFormat?: "markdown" | "plain_text";
-  targetWordCount?: number;
   firstSpeakerPersonaId?: string;
   skippedPersonaIds?: string[];
   warnings?: string[];
-  consensusSummary: string;
-  dissentSummary: string;
   sharedTranscript?: string[];
   turnBids?: Array<{
     personaId: string;
@@ -106,99 +102,6 @@ interface ErrorPayload {
   error?: string;
 }
 
-function renderInlineMarkdown(text: string): ReactNode[] {
-  const tokens = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-  return tokens.map((token, index) => {
-    const match = token.match(/^\*\*(.+)\*\*$/);
-    if (match) {
-      return <strong key={`bold-${index}`}>{match[1]}</strong>;
-    }
-    return <span key={`text-${index}`}>{token}</span>;
-  });
-}
-
-function renderMarkdownReport(markdown: string): ReactNode[] {
-  const lines = markdown.split(/\r?\n/);
-  const blocks: ReactNode[] = [];
-  let i = 0;
-  let key = 0;
-
-  while (i < lines.length) {
-    const line = lines[i]?.trimEnd() ?? "";
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      i += 1;
-      continue;
-    }
-
-    if (trimmed.startsWith("# ")) {
-      blocks.push(
-        <h3 key={`h1-${key++}`} className="text-lg font-semibold text-[color:var(--ink-1)]">
-          {renderInlineMarkdown(trimmed.slice(2).trim())}
-        </h3>,
-      );
-      i += 1;
-      continue;
-    }
-
-    if (trimmed.startsWith("## ")) {
-      blocks.push(
-        <h4 key={`h2-${key++}`} className="mt-3 text-base font-semibold text-[color:var(--ink-1)]">
-          {renderInlineMarkdown(trimmed.slice(3).trim())}
-        </h4>,
-      );
-      i += 1;
-      continue;
-    }
-
-    if (trimmed.startsWith("- ")) {
-      const items: string[] = [];
-      while (i < lines.length) {
-        const candidate = lines[i]?.trim() ?? "";
-        if (!candidate.startsWith("- ")) {
-          break;
-        }
-        items.push(candidate.slice(2).trim());
-        i += 1;
-      }
-
-      blocks.push(
-        <ul key={`ul-${key++}`} className="list-disc space-y-1 pl-5 text-sm text-[color:var(--ink-2)]">
-          {items.map((item, itemIndex) => (
-            <li key={`li-${itemIndex}`} className="whitespace-pre-wrap">
-              {renderInlineMarkdown(item)}
-            </li>
-          ))}
-        </ul>,
-      );
-      continue;
-    }
-
-    const paragraphLines: string[] = [];
-    while (i < lines.length) {
-      const candidate = lines[i]?.trim() ?? "";
-      if (!candidate) {
-        i += 1;
-        break;
-      }
-      if (candidate.startsWith("#") || candidate.startsWith("- ")) {
-        break;
-      }
-      paragraphLines.push(candidate);
-      i += 1;
-    }
-
-    blocks.push(
-      <p key={`p-${key++}`} className="text-sm leading-6 text-[color:var(--ink-2)]">
-        {renderInlineMarkdown(paragraphLines.join(" "))}
-      </p>,
-    );
-  }
-
-  return blocks;
-}
-
 export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPageProps) {
   const streamRef = useRef<EventSource | null>(null);
   const missingRunPollCountRef = useRef(0);
@@ -237,8 +140,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [meetingArtifacts, setMeetingArtifacts] = useState(
     "Board packet summary:\n- baseline operating assumptions and constraints\n- key delivery dependencies\n\nBoard packet summary:\n- current risk posture\n- control expectations",
   );
-  const [outputFormat, setOutputFormat] = useState<"markdown" | "plain_text">("markdown");
-  const [targetWordCount, setTargetWordCount] = useState(600);
   const [reasoningLevel, setReasoningLevel] = useState(6);
   const [maxConversationTurns, setMaxConversationTurns] = useState(24);
   const [randomness, setRandomness] = useState(0.2);
@@ -268,11 +169,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [status, setStatus] = useState("idle");
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runWarnings, setRunWarnings] = useState<string[]>([]);
-  const [reportContent, setReportContent] = useState("");
-  const [reportFormat, setReportFormat] = useState<"markdown" | "plain_text">("markdown");
   const [transcriptExpanded, setTranscriptExpanded] = useState(false);
   const [transcriptPdfLoading, setTranscriptPdfLoading] = useState(false);
-  const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
@@ -456,21 +354,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     streamRef.current = null;
   }, []);
 
-  const fetchReport = useCallback(async (runId: string): Promise<boolean> => {
-    const reportResponse = await fetch(`/api/shadow-board/runs/${runId}/report`);
-    if (!reportResponse.ok) {
-      return false;
-    }
-    const reportPayload = (await reportResponse.json()) as {
-      format?: "markdown" | "plain_text";
-      content?: string;
-      markdown?: string;
-    };
-    setReportContent(reportPayload.content ?? reportPayload.markdown ?? "");
-    setReportFormat(reportPayload.format ?? "markdown");
-    return true;
-  }, []);
-
   const fetchRunById = useCallback(async (runId: string): Promise<{ run: RunResult | null; status: number }> => {
     const response = await fetch(`/api/shadow-board/runs/${runId}`);
     if (!response.ok) {
@@ -478,27 +361,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     }
     return { run: (await response.json()) as RunResult, status: response.status };
   }, []);
-
-  const manualGenerateReport = useCallback(async () => {
-    setError(null);
-    const runId = runResult?.runId ?? runs[0]?.runId;
-    if (!runId) {
-      setError("No run found to generate a report from.");
-      return;
-    }
-
-    setReportLoading(true);
-    try {
-      const ok = await fetchReport(runId);
-      if (!ok) {
-        setError(`Unable to generate report for run ${runId}.`);
-      }
-    } catch {
-      setError(`Unable to generate report for run ${runId}.`);
-    } finally {
-      setReportLoading(false);
-    }
-  }, [fetchReport, runResult?.runId, runs]);
 
   const downloadTranscriptPdf = useCallback(async () => {
     setError(null);
@@ -570,7 +432,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         // EventSource auto-reconnects; keep stream open unless run terminal event arrives.
       };
     },
-    [closeShadowStream, fetchReport, refreshRuns],
+    [closeShadowStream, refreshRuns],
   );
 
   const runShadowBoard = useCallback(async () => {
@@ -587,8 +449,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     }
     setStatus("running");
     setRunWarnings([]);
-    setReportContent("");
-    setReportFormat(outputFormat);
     missingRunPollCountRef.current = 0;
     closeShadowStream();
 
@@ -617,8 +477,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           maxConversationTurns,
           randomness,
           meetingArtifacts: meetingArtifactList,
-          outputFormat,
-          targetWordCount,
           transcriptSeed: [
             `Board Chair: Agenda - ${derivedAgenda}`,
             `Board Chair: Focus topics - ${derivedTopics.join("; ")}`,
@@ -638,8 +496,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       setRunWarnings(payload.warnings ?? []);
       if (payload.status === "running") {
         openShadowStream(payload.runId);
-      } else {
-        void fetchReport(payload.runId);
       }
 
       void refreshRuns();
@@ -653,19 +509,16 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     closeShadowStream,
     derivedAgenda,
     derivedTopics,
-    fetchReport,
     maxConversationTurns,
     meetingArtifactList,
     openShadowStream,
     randomness,
     reasoningLevel,
-    outputFormat,
     refreshRuns,
     selectedDocumentIds,
     selectedMeetingId,
     shadowSessionId,
     selectedPersonaIds,
-    targetWordCount,
     readErrorMessage,
   ]);
 
@@ -906,31 +759,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               </label>
               <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
                 <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
-                  Output Format
-                  <select
-                    value={outputFormat}
-                    onChange={(event) => setOutputFormat(event.target.value as "markdown" | "plain_text")}
-                    className="rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--ink-1)]"
-                  >
-                    <option value="markdown">Markdown</option>
-                    <option value="plain_text">Plain Text</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
-                  Target Length (words): {targetWordCount}
-                  <input
-                    type="range"
-                    min={150}
-                    max={4000}
-                    step={50}
-                    value={targetWordCount}
-                    onChange={(event) => setTargetWordCount(Number(event.target.value))}
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
-                <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
                   Reasoning Depth: {reasoningLevel}
                   <input
                     type="range"
@@ -1020,7 +848,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                 </div>
                 {selectedDocumentIds.length === 0 ? (
                   <p className="mt-2 text-xs text-[color:var(--warn-ink)]">
-                    No files attached to this run yet. You can still run, but recommendations may be less grounded.
+                    No files attached to this run yet. You can still run, but transcript context may be less grounded.
                   </p>
                 ) : null}
               </div>
@@ -1041,19 +869,11 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
             </div>
           </SectionCard>
 
-          <SectionCard title="Outcome" subtitle="Consensus, dissent, recommendation packet, and recent runs">
+          <SectionCard title="Outcome" subtitle="Run status, transcript, warnings, and recent runs">
             {!runResult ? (
               <p className="text-sm text-[color:var(--ink-3)]">No run yet.</p>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3">
-                  <p className="text-xs uppercase tracking-wide text-[color:var(--ink-3)]">Consensus</p>
-                  <p className="text-sm text-[color:var(--ink-1)]">{runResult.consensusSummary}</p>
-                </div>
-                <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3">
-                  <p className="text-xs uppercase tracking-wide text-[color:var(--ink-3)]">Dissent</p>
-                  <p className="text-sm text-[color:var(--ink-1)]">{runResult.dissentSummary}</p>
-                </div>
                 <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3 text-xs text-[color:var(--ink-2)]">
                   <p>
                     First speaker:{" "}
@@ -1083,17 +903,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                     </div>
                   </div>
                 ) : null}
-                <div className="space-y-2">
-                  {runResult.recommendations.map((recommendation, index) => (
-                    <article
-                      key={`${recommendation.theme}-${index}`}
-                      className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] p-3"
-                    >
-                      <p className="text-sm font-semibold text-[color:var(--ink-1)]">{recommendation.theme}</p>
-                      <p className="text-sm text-[color:var(--ink-2)]">{recommendation.recommendation}</p>
-                    </article>
-                  ))}
-                </div>
 
                 <div className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
                   <div className="mb-1 flex items-center justify-between gap-2">
@@ -1124,7 +933,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                     {(runResult.sharedTranscript ?? []).length === 0 ? (
                       <p>No transcript lines yet.</p>
                     ) : (
-                      (runResult.sharedTranscript ?? []).map((line, index) => (
+                      (runResult.sharedTranscript ?? []).slice(-200).map((line, index) => (
                         <p key={`${index}-${line.slice(0, 14)}`} className="whitespace-pre-wrap">
                           {line}
                         </p>
@@ -1154,37 +963,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               </div>
             </div>
           </SectionCard>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Shadow Board Report" subtitle="Formatted report for board prep review">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-xs text-[color:var(--ink-3)]">
-            {runResult?.runId ? `Run: ${runResult.runId}` : runs[0]?.runId ? `Latest run: ${runs[0].runId}` : "No run selected"}
-          </p>
-          <button
-            type="button"
-            onClick={() => void manualGenerateReport()}
-            disabled={reportLoading || (!runResult?.runId && runs.length === 0)}
-            className="rounded-xl border border-[color:var(--line)] bg-[color:var(--card-bg)] px-3 py-2 text-xs text-[color:var(--ink-2)] disabled:opacity-50"
-          >
-            {reportLoading ? "Generating..." : "Generate Report"}
-          </button>
-        </div>
-        <div className="max-h-96 space-y-3 overflow-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3">
-          {!reportContent ? (
-            <p className="text-sm text-[color:var(--ink-3)]">No report generated yet.</p>
-          ) : reportFormat === "plain_text" ? (
-            reportContent
-              .split(/\r?\n\r?\n+/)
-              .map((paragraph, index) => (
-                <p key={`plain-${index}`} className="text-sm leading-6 text-[color:var(--ink-2)]">
-                  {paragraph.trim()}
-                </p>
-              ))
-          ) : (
-            renderMarkdownReport(reportContent)
-          )}
         </div>
       </SectionCard>
 

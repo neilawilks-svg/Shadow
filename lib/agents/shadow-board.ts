@@ -1513,7 +1513,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
 
     const turnCounts = new Map<string, number>();
     const lastSpokenAt = new Map<string, number>();
-    const turnsByPersona = new Map<string, PersonaTurn[]>();
+    const turnsByPersona = new Map<string, string[]>();
     const allBids: BoardTurnBid[] = [];
     const turnMeta: ShadowBoardTurnMeta[] = [];
 
@@ -1598,24 +1598,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       sharedTranscript.splice(0, sharedTranscript.length - MAX_TRANSCRIPT_LINES);
     }
 
-    const openingTurn: PersonaTurn = {
-      personaId: opener.id,
-      personaName: opener.name,
-      comment: openingComment,
-      position: openingResponse.position,
-      insights: openingResponse.insights,
-      advice: openingResponse.advice,
-      questions: openingResponse.questions,
-      interactionModes: openingResponse.interactionModes,
-      thinkingStep: toSentence(openingResponse.reason),
-      risk: buildPersonaRiskLine(opener, openingTopic, openingResponse.reason),
-      recommendation: buildPersonaRecommendation(opener, openingTopic, openingComment),
-      challengeQuestion: buildPersonaChallengeQuestion(opener, openingTopic),
-      confidence: openingResponse.confidence,
-      round: 1,
-    };
-
-    turnsByPersona.set(opener.id, [openingTurn]);
+    turnsByPersona.set(opener.id, [openingComment]);
     turnCounts.set(opener.id, 1);
     lastSpokenAt.set(opener.id, 0);
 
@@ -1645,7 +1628,6 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       });
     }
     run.turnMeta = [...turnMeta];
-    run.outputs = speakingPersonas.map((persona) => buildPersonaOutput(persona, turnsByPersona.get(persona.id) ?? []));
     await updateShadowBoardRun(run);
     await publishRunEvent(run, "turn_committed", {
       turnIndex: 1,
@@ -1734,7 +1716,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       const speakerArtifacts = [...baseArtifacts, ...speakerEvidence].slice(0, 100);
       const speakerPersonaArtifacts = selectPersonaArtifacts(speaker, speakerArtifacts);
 
-      const priorSpeakerTurns = (turnsByPersona.get(speaker.id) ?? []).map((turn) => turn.comment);
+      const priorSpeakerTurns = turnsByPersona.get(speaker.id) ?? [];
 
       const response = await generatePersonaComment({
         runId: run.runId,
@@ -1759,25 +1741,8 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       const normalizedComment = response.comment;
       const transcriptLine = toTurnTranscriptBlock(turnIndex + 1, normalizedComment);
 
-      const turn: PersonaTurn = {
-        personaId: speaker.id,
-        personaName: speaker.name,
-        comment: normalizedComment,
-        position: response.position,
-        insights: response.insights,
-        advice: response.advice,
-        questions: response.questions,
-        interactionModes: response.interactionModes,
-        thinkingStep: toSentence(response.reason),
-        risk: buildPersonaRiskLine(speaker, topic, response.reason),
-        recommendation: buildPersonaRecommendation(speaker, topic, normalizedComment),
-        challengeQuestion: buildPersonaChallengeQuestion(speaker, topic),
-        confidence: response.confidence,
-        round: turnIndex + 1,
-      };
-
       const currentTurns = turnsByPersona.get(speaker.id) ?? [];
-      currentTurns.push(turn);
+      currentTurns.push(normalizedComment);
       turnsByPersona.set(speaker.id, currentTurns);
 
       turnCounts.set(speaker.id, (turnCounts.get(speaker.id) ?? 0) + 1);
@@ -1804,7 +1769,6 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
         });
       }
       run.turnMeta = [...turnMeta];
-      run.outputs = speakingPersonas.map((persona) => buildPersonaOutput(persona, turnsByPersona.get(persona.id) ?? []));
       await updateShadowBoardRun(run);
       await publishRunEvent(run, "turn_committed", {
         turnIndex: turnIndex + 1,
@@ -1826,26 +1790,15 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       }
     }
 
-    const outputs = speakingPersonas.map((persona) => buildPersonaOutput(persona, turnsByPersona.get(persona.id) ?? []));
-    const fallback = fallbackRecommendations(outputs);
-    const consensus = await synthesizeConsensus({
-      runId: run.runId,
-      agenda: input.agenda,
-      topics: topicList,
-      transcript: sharedTranscript,
-      outputs,
-      fallback,
-    });
-
     const completed: ShadowBoardRun = {
       ...run,
       status: "completed",
       finishedAt: new Date().toISOString(),
-      outputs,
+      outputs: [],
       turnBids: allBids,
-      recommendations: consensus.recommendations,
-      consensusSummary: consensus.consensusSummary,
-      dissentSummary: consensus.dissentSummary,
+      recommendations: [],
+      consensusSummary: "",
+      dissentSummary: "",
       sharedTranscript,
       agendaItems: plannedAgendaItems,
       turnMeta,

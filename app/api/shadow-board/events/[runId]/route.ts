@@ -12,7 +12,7 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
     return jsonError("Run id is required.", 400);
   }
 
-  const history = await getShadowBoardRunEvents(runId, 200);
+  const history = await getShadowBoardRunEvents(runId, 100);
   const encoder = new TextEncoder();
 
   let teardown: (() => void) | null = null;

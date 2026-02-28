@@ -12,5 +12,23 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
     return jsonError("Shadow board run not found.", 404);
   }
 
-  return jsonOk(run);
+  return jsonOk({
+    runId: run.runId,
+    status: run.status,
+    agenda: run.agenda,
+    topics: run.topics,
+    firstSpeakerPersonaId: run.firstSpeakerPersonaId,
+    skippedPersonaIds: run.skippedPersonaIds ?? [],
+    warnings: run.warnings ?? [],
+    sharedTranscript: run.sharedTranscript ?? [],
+    turnMeta: run.turnMeta ?? [],
+    startedAt: run.startedAt,
+    finishedAt: run.finishedAt,
+    outputFormat: run.outputFormat ?? "markdown",
+    targetWordCount: run.targetWordCount ?? 600,
+    outputs: [],
+    recommendations: [],
+    consensusSummary: "",
+    dissentSummary: "",
+  });
 }
