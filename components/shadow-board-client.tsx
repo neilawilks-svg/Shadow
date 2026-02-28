@@ -201,7 +201,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const [suggestingTopics, setSuggestingTopics] = useState(false);
   const [topicSuggestError, setTopicSuggestError] = useState<string | null>(null);
   const [meetingArtifacts, setMeetingArtifacts] = useState(
-    "Board packet summary: baseline operating assumptions and constraints.\nBoard packet summary: current risk posture and control expectations.",
+    "Board packet summary:\n- baseline operating assumptions and constraints\n- key delivery dependencies\n\nBoard packet summary:\n- current risk posture\n- control expectations",
   );
   const [outputFormat, setOutputFormat] = useState<"markdown" | "plain_text">("markdown");
   const [targetWordCount, setTargetWordCount] = useState(600);
@@ -264,8 +264,14 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
   const meetingArtifactList = useMemo(
     () =>
       meetingArtifacts
-        .split(/\r?\n+/)
-        .map((item) => item.trim())
+        .split(/\r?\n\s*\r?\n/g)
+        .map((block) =>
+          block
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join("\n"),
+        )
         .filter(Boolean),
     [meetingArtifacts],
   );
@@ -696,12 +702,15 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
               </label>
 
               <label className="grid gap-1 text-sm text-[color:var(--ink-2)]">
-                Meeting Artifacts (one line per artifact)
+                Meeting Artifacts (multi-line blocks, separated by a blank line)
                 <textarea
                   value={meetingArtifacts}
                   onChange={(event) => setMeetingArtifacts(event.target.value)}
                   className="min-h-24 rounded-xl border border-[color:var(--line)] bg-[color:var(--field-bg)] p-3 text-sm text-[color:var(--ink-1)]"
                 />
+                <span className="text-xs text-[color:var(--ink-3)]">
+                  Artifact blocks detected: {meetingArtifactList.length}
+                </span>
               </label>
               <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-2)] p-3">
                 <label className="grid gap-1 text-xs text-[color:var(--ink-3)]">
