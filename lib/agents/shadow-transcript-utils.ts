@@ -16,18 +16,26 @@ export function parseShadowTranscriptTurn(line: string): { speaker: string; text
   }
 
   let cleaned = line.trim();
-  const turnMatch = cleaned.match(/^\[Turn\s+\d+\]\s+(.*)$/i);
-  if (turnMatch) {
-    cleaned = turnMatch[1]?.trim() ?? "";
+  cleaned = cleaned.replace(/^\[Turn\s+\d+\]\s*/i, "").trim();
+
+  const lines = cleaned
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return null;
   }
 
-  const separatorIndex = cleaned.indexOf(":");
+  const header = lines[0] ?? "";
+  const separatorIndex = header.indexOf(":");
   if (separatorIndex <= 0) {
     return null;
   }
 
-  const speaker = cleaned.slice(0, separatorIndex).trim();
-  const text = cleaned.slice(separatorIndex + 1).trim();
+  const speaker = header.slice(0, separatorIndex).trim();
+  const firstLineBody = header.slice(separatorIndex + 1).trim();
+  const trailingBody = lines.slice(1).join(" ").trim();
+  const text = [firstLineBody, trailingBody].filter(Boolean).join(" ").trim();
   if (!speaker || !text) {
     return null;
   }

@@ -20,6 +20,16 @@ describe("shadow transcript utils", () => {
     });
   });
 
+  it("parses multiline structured transcript blocks", () => {
+    const parsed = parseShadowTranscriptTurn(
+      "[Turn 2] Anthony Battle:\nPosition: We need clearer operating thresholds.\nInsight:\n- Drift can break delivery quality.",
+    );
+    expect(parsed).toEqual({
+      speaker: "Anthony Battle",
+      text: "Position: We need clearer operating thresholds. Insight: - Drift can break delivery quality.",
+    });
+  });
+
   it("strips speaker prefix case-insensitively", () => {
     expect(stripSpeakerPrefix("morgan: Pilot first.", "Morgan")).toBe("Pilot first.");
   });
