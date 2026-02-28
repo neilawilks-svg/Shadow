@@ -69,11 +69,11 @@ function rehydrateRunFromEvents(runId: string, events: ShadowBoardRunEvent[]): S
 
 export async function GET(_: Request, context: { params: Promise<{ runId: string }> }) {
   const { runId } = await context.params;
-  let run = await getShadowBoardRun(runId);
+  let run: ShadowBoardRun | undefined = await getShadowBoardRun(runId);
 
   if (!run) {
     const events = await getShadowBoardRunEvents(runId, 5000);
-    run = rehydrateRunFromEvents(runId, events);
+    run = rehydrateRunFromEvents(runId, events) ?? undefined;
   }
 
   if (!run) {
