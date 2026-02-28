@@ -998,7 +998,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       </SectionCard>
 
       <SectionCard
-        title="8-Bit Virtual Board Roam"
+        title="8-Bit Virtual Board Room"
         subtitle="Move around the boardroom and inspect each member's comments and reasoning bubbles"
       >
         <ShadowBoard8BitRoam
