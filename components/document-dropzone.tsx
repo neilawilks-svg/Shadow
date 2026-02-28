@@ -7,6 +7,10 @@ interface UploadResult {
   documents?: Array<{ id: string }>;
 }
 
+interface ApiErrorPayload {
+  error?: string;
+}
+
 interface DocumentDropzoneProps {
   onDocumentsChanged?: (newDocumentIds?: string[]) => void;
 }
@@ -48,7 +52,9 @@ export function DocumentDropzone({ onDocumentsChanged }: DocumentDropzoneProps) 
           });
 
           if (!response.ok) {
-            throw new Error(`Upload failed for ${file.name}.`);
+            const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+            const reason = payload?.error?.trim() ? payload.error.trim() : `Upload failed for ${file.name}.`;
+            throw new Error(reason);
           }
 
           const payload = (await response.json()) as UploadResult;
@@ -83,7 +89,9 @@ export function DocumentDropzone({ onDocumentsChanged }: DocumentDropzoneProps) 
       });
 
       if (!response.ok) {
-        throw new Error("Unable to bootstrap from local new-files directory.");
+        const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+        const reason = payload?.error?.trim() ? payload.error.trim() : "Unable to bootstrap from local new-files directory.";
+        throw new Error(reason);
       }
 
       const payload = (await response.json()) as UploadResult;

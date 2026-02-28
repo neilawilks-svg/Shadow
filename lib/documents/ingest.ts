@@ -2,6 +2,7 @@ import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
 
 import { upsertDocuments } from "@/lib/store/repository";
 import type { DocumentRecord } from "@/types/domain";
@@ -73,6 +74,37 @@ async function runIngestScript(args: string[]): Promise<ScriptManifest> {
   return JSON.parse(rawManifest) as ScriptManifest;
 }
 
+function inferSourceType(filePath: string): DocumentRecord["sourceType"] {
+  const extension = path.extname(filePath).toLowerCase().replace(".", "");
+  if (extension === "docx" || extension === "pptx" || extension === "pdf" || extension === "md" || extension === "txt" || extension === "zip") {
+    return extension;
+  }
+  return "other";
+}
+
+async function fallbackRecordFromFile(inputFilePath: string): Promise<DocumentRecord[]> {
+  const stat = await fs.stat(inputFilePath);
+  const nowIso = new Date().toISOString();
+  const title = path.basename(inputFilePath).replace(/^\d+\-[0-9a-f\-]+\-/i, "");
+  const record: DocumentRecord = {
+    id: `doc-${randomUUID()}`,
+    title: title || path.basename(inputFilePath),
+    sourcePath: inputFilePath,
+    sourceType: inferSourceType(inputFilePath),
+    people: [],
+    tags: ["uploaded"],
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    confidentiality: "local_only",
+    vaultPath: inputFilePath,
+    summary: `Uploaded file (${Math.round(stat.size / 1024)} KB).`,
+    chunkIds: [],
+  };
+
+  await upsertDocuments([record]);
+  return [record];
+}
+
 async function rebuildMemberAgentProfiles(force: boolean): Promise<void> {
   const args = [PROFILE_SCRIPT, "--vault-dir", path.join(process.cwd(), "local", "board-vault")];
   if (force) {
@@ -110,9 +142,13 @@ export async function ingestSingleDocument(inputFilePath: string, cleanupAi = fa
     args.push("--cleanup-ai");
   }
 
-  const manifest = await runIngestScript(args);
-  await rebuildMemberAgentProfiles(true);
-  const records = manifest.documents.map(toRecord);
-  await upsertDocuments(records);
-  return records;
+  try {
+    const manifest = await runIngestScript(args);
+    await rebuildMemberAgentProfiles(true);
+    const records = manifest.documents.map(toRecord);
+    await upsertDocuments(records);
+    return records;
+  } catch {
+    return fallbackRecordFromFile(inputFilePath);
+  }
 }
