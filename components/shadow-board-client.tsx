@@ -202,9 +202,12 @@ function renderMarkdownReport(markdown: string): ReactNode[] {
 export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPageProps) {
   const streamRef = useRef<EventSource | null>(null);
   const missingRunPollCountRef = useRef(0);
+  const isMorganPersona = (persona: Persona) => persona.name.trim().toLowerCase() === "morgan";
   const [personas] = useState<Persona[]>(initialPersonas);
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>(
-    initialPersonas.filter((persona) => persona.role === "board_member").map((persona) => persona.id),
+    initialPersonas
+      .filter((persona) => persona.role === "board_member" && !isMorganPersona(persona))
+      .map((persona) => persona.id),
   );
   const [agendaItems, setAgendaItems] = useState<AgendaItemDraft[]>([
     {
@@ -557,7 +560,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           if (payload.type === "run_completed" || payload.type === "run_failed") {
             closeShadowStream();
             void refreshRuns();
-            void fetchReport(runId);
           }
         } catch {
           // Ignore malformed stream payloads.
@@ -672,7 +674,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       return;
     }
 
-    const boardMemberIds = personas.filter((persona) => persona.role === "board_member").map((persona) => persona.id);
+    const boardMemberIds = personas
+      .filter((persona) => persona.role === "board_member" && !isMorganPersona(persona))
+      .map((persona) => persona.id);
     if (boardMemberIds.length > 0) {
       setSelectedPersonaIds(boardMemberIds);
       return;
@@ -723,7 +727,6 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           setRunWarnings(latest.warnings);
         }
         if (latest.status === "completed" || latest.status === "failed") {
-          void fetchReport(runId);
           void refreshRuns();
           closeShadowStream();
         }
@@ -733,7 +736,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     return () => {
       window.clearInterval(interval);
     };
-  }, [closeShadowStream, fetchReport, fetchRunById, refreshRuns, runResult?.runId, status]);
+  }, [closeShadowStream, fetchRunById, refreshRuns, runResult?.runId, status]);
 
   useEffect(() => {
     return () => {

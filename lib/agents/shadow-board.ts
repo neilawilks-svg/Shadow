@@ -1859,7 +1859,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       {
         message: "Shadow board run completed.",
       },
-      { includeRun: true },
+      { includeRun: false },
     );
 
     return completed;
@@ -1877,7 +1877,7 @@ async function executeShadowBoardRun(runRecord: ShadowBoardRun, input: RunInput)
       {
         message: failed.error,
       },
-      { includeRun: true },
+      { includeRun: false },
     );
     return failed;
   }
