@@ -443,20 +443,12 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
     setTranscriptPdfLoading(true);
     try {
-      const response = await fetch(`/api/shadow-board/runs/${runId}/transcript-pdf`);
-      if (!response.ok) {
-        setError(`Unable to download transcript PDF for run ${runId}.`);
-        return;
-      }
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = objectUrl;
+      anchor.href = `/api/shadow-board/runs/${runId}/transcript-pdf?ts=${Date.now()}`;
       anchor.download = `${runId}-transcript.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      window.URL.revokeObjectURL(objectUrl);
     } catch {
       setError(`Unable to download transcript PDF for run ${runId}.`);
     } finally {
@@ -932,7 +924,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                     {(runResult.sharedTranscript ?? []).length === 0 ? (
                       <p>No transcript lines yet.</p>
                     ) : (
-                      (runResult.sharedTranscript ?? []).slice(-20).map((line, index) => (
+                      (runResult.sharedTranscript ?? []).map((line, index) => (
                         <p key={`${index}-${line.slice(0, 14)}`}>{line}</p>
                       ))
                     )}
