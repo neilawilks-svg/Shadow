@@ -661,8 +661,10 @@ function buildProfileDerivedComment(params: {
 }): MemberResponse {
   const fallback = buildDeterministicStructuredFallback({
     persona: params.persona,
+    profile: params.profile,
     topic: params.topic,
     agenda: params.agenda,
+    turnIndex: params.turnIndex,
     reason: `${params.persona.name} provided a deterministic fallback turn.`,
   });
 
@@ -1307,28 +1309,65 @@ async function generatePersonaComment(params: {
 
   const fallbackStructured = buildDeterministicStructuredFallback({
     persona: params.persona,
+    profile: params.profile,
     topic: params.topic,
     agenda: params.agenda,
+    turnIndex: params.turnIndex,
     reason: `${params.persona.name} fallback due to validation or novelty constraints.`,
   });
+  const fallbackCandidates = [fallbackStructured];
+  for (let variant = 1; variant <= 2; variant += 1) {
+    fallbackCandidates.push(
+      buildDeterministicStructuredFallback({
+        persona: params.persona,
+        profile: params.profile,
+        topic: params.topic,
+        agenda: params.agenda,
+        turnIndex: params.turnIndex,
+        variant,
+        reason: `${params.persona.name} fallback variant ${variant} due to validation or novelty constraints.`,
+      }),
+    );
+  }
+
+  let chosenFallback = fallbackCandidates[0]!;
+  for (const candidate of fallbackCandidates) {
+    const comment = buildStructuredComment({
+      personaName: params.persona.name,
+      position: candidate.position,
+      insights: candidate.insights,
+      advice: candidate.advice,
+      questions: candidate.questions,
+    });
+    const tooSimilar = isCommentTooSimilar({
+      comment,
+      persona: params.persona,
+      transcript: params.transcript,
+      personaTurnHistory: params.personaTurnHistory,
+    });
+    if (!tooSimilar) {
+      chosenFallback = candidate;
+      break;
+    }
+  }
 
   const fallback: MemberResponse = {
     comment: buildStructuredComment({
       personaName: params.persona.name,
-      position: fallbackStructured.position,
-      insights: fallbackStructured.insights,
-      advice: fallbackStructured.advice,
-      questions: fallbackStructured.questions,
+      position: chosenFallback.position,
+      insights: chosenFallback.insights,
+      advice: chosenFallback.advice,
+      questions: chosenFallback.questions,
     }),
-    position: fallbackStructured.position,
-    insights: fallbackStructured.insights,
-    advice: fallbackStructured.advice,
-    questions: fallbackStructured.questions,
+    position: chosenFallback.position,
+    insights: chosenFallback.insights,
+    advice: chosenFallback.advice,
+    questions: chosenFallback.questions,
     interactionModes: ["quantify", "operationalise", "challenge"],
-    experienceReference: fallbackStructured.experienceReference,
-    reason: fallbackStructured.reason ?? `${params.persona.name} fallback turn`,
-    confidence: fallbackStructured.confidence ?? 0.55,
-    citations: fallbackStructured.citations ?? [],
+    experienceReference: chosenFallback.experienceReference,
+    reason: chosenFallback.reason ?? `${params.persona.name} fallback turn`,
+    confidence: chosenFallback.confidence ?? 0.55,
+    citations: chosenFallback.citations ?? [],
   };
 
   const violationMessages = [

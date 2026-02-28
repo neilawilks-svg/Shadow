@@ -1,4 +1,4 @@
-import type { PersonaProfile } from "@/types/domain";
+import type { BoardMemberAgentProfile, PersonaProfile } from "@/types/domain";
 
 export type InteractionMode =
   | "build"
@@ -68,6 +68,14 @@ const BIOGRAPHY_PATTERNS = [
 
 function normalizeLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function toSentence(value: string): string {
+  const cleaned = normalizeLine(value);
+  if (!cleaned) {
+    return "";
+  }
+  return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
 }
 
 function splitSentences(value: string): string[] {
@@ -201,26 +209,95 @@ export function validateTurn(
 
 export function buildDeterministicStructuredFallback(params: {
   persona: PersonaProfile;
+  profile: BoardMemberAgentProfile;
   topic: string;
   agenda: string;
+  turnIndex?: number;
+  variant?: number;
   reason: string;
 }): StructuredTurnCandidate {
   const agendaAnchor = params.agenda.slice(0, 180);
+  const seed = `${params.persona.id}:${params.turnIndex ?? 0}:${params.variant ?? 0}:${params.topic}`;
+  const seedValue = Array.from(seed).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const pick = (items: string[], fallback: string, offset = 0): string => {
+    const normalized = items.map((item) => normalizeLine(item)).filter(Boolean);
+    if (normalized.length === 0) {
+      return fallback;
+    }
+    return normalized[(seedValue + offset) % normalized.length] ?? fallback;
+  };
+
+  const lens = params.persona.lens.toLowerCase();
+  const decisionHeuristic = pick(
+    params.profile.decisionHeuristics,
+    `Prioritize an evidence-backed operating model for ${params.topic} with explicit thresholds before scaling.`,
+    1,
+  );
+  const supportTrigger = pick(
+    params.profile.supportTriggers,
+    "Back initiatives that tie measurable client value to clear delivery accountability.",
+    2,
+  );
+  const challengeTrigger = pick(
+    params.profile.challengeTriggers,
+    "Challenge plans that under-specify risk ownership, escalation paths, or monitoring controls.",
+    3,
+  );
+  const strength = pick(
+    params.profile.strengths,
+    "Translate strategic intent into practical operating changes with measurable outcomes.",
+    4,
+  );
+  const blindSpot = pick(
+    params.profile.blindSpots,
+    "Ensure speed does not overtake governance discipline in client-facing delivery.",
+    5,
+  );
+  const languageCue = pick(
+    params.profile.languagePatternsToUse,
+    "Use concise, evidence-led board language tied to trade-offs and delivery implications.",
+    6,
+  );
+
+  const riskLine =
+    params.persona.riskPosture === "risk_averse"
+      ? "risk containment and assurance discipline"
+      : params.persona.riskPosture === "risk_tolerant"
+        ? "calibrated experimentation with explicit downside boundaries"
+        : "balanced delivery velocity and governance control";
+
+  const position = toSentence(
+    `${params.persona.name} views ${params.topic} through a ${lens} perspective and recommends a ${riskLine} approach for Slalom UK & Ireland`,
+  );
+
+  const insights = [
+    toSentence(
+      `Key assumption to pressure-test: ${decisionHeuristic.toLowerCase().replace(/^[a-z]/, (char) => char)}`,
+    ),
+    toSentence(
+      `Second-order implication from this lens: ${challengeTrigger.toLowerCase().replace(/^[a-z]/, (char) => char)}`,
+    ),
+    toSentence(
+      `Execution differentiator for this member: ${strength.toLowerCase().replace(/^[a-z]/, (char) => char)}`,
+    ),
+  ];
+
+  const advice = [
+    toSentence(`In the next 2-4 weeks, run a focused pilot where success criteria directly reflect ${supportTrigger.toLowerCase()}`),
+    toSentence(`Create a delivery checkpoint that explicitly addresses this blind spot: ${blindSpot.toLowerCase()}`),
+    toSentence(`Keep the recommendation language concrete: ${languageCue.toLowerCase()}`),
+  ];
+
+  const questions = [
+    "Which single KPI would prove this topic is creating differentiated value rather than faster commodity output?",
+    "Where is the named owner for risk monitoring, and what escalation threshold triggers intervention?",
+  ];
+
   return {
-    position: `${params.persona.name} sees ${params.topic} as the practical decision-quality lever in this agenda and recommends testing assumptions before scale.`,
-    insights: [
-      `A hidden assumption is that current delivery controls can absorb new AI-enabled workflow variance without redefining accountability boundaries.`,
-      `Second-order impact: if quality thresholds are unclear, client confidence and commercial predictability will diverge across accounts.`,
-      `Operating model gap: current teams may lack explicit model-risk ownership across build, monitoring, and escalation.`,
-    ],
-    advice: [
-      "Run a two-week pilot with explicit quality thresholds, escalation paths, and evidence capture in the delivery workflow.",
-      "Create a reusable assurance pack that documents metrics, drift checks, and contract-facing service commitments.",
-    ],
-    questions: [
-      "Which single measurable threshold should trigger intervention when model outputs drift from expected quality?",
-      "Where in our current engagement model is liability for model-assisted recommendations explicitly documented?",
-    ],
+    position,
+    insights,
+    advice,
+    questions,
     interactionModes: ["quantify", "operationalise", "challenge"],
     experienceReference: `${params.persona.name} is using an execution-focused lens tied to this agenda context: ${agendaAnchor}.`,
     reason: params.reason,
