@@ -90,6 +90,10 @@ function shouldUseShadowBlobState(): boolean {
   return Boolean(BLOB_WRITE_TOKEN);
 }
 
+export function getShadowStateBackend(): "blob" | "file" {
+  return shouldUseShadowBlobState() ? "blob" : "file";
+}
+
 function buildShadowBlobUrl(fileName: string, write = false): string {
   const base = `${BLOB_BASE_URL}/${SHADOW_STATE_PREFIX}/${fileName}`;
   if (!write) {
@@ -410,8 +414,9 @@ export async function updateInterviewSession(updated: PersonaInterviewSession): 
 }
 
 export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
+  const runFileName = `${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`;
   // Persist canonical per-run state first so polling/ticks can always find the run.
-  await writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run);
+  await writeShadowStateJson(runFileName, run);
 
   // Keep global index best-effort to avoid blocking run creation on index write pressure.
   try {
@@ -421,6 +426,24 @@ export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
   } catch {
     // list/recent-runs index is non-critical for active run lifecycle
   }
+
+  // Hard guarantee: do not report a started run unless it can be read back.
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      const persisted = await readShadowStateJson<ShadowBoardRun | null>(runFileName, null);
+      if (persisted?.runId === run.runId) {
+        return;
+      }
+    } catch {
+      // Retry read-after-write checks on transient storage issues.
+    }
+
+    if (attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
+  }
+
+  throw new Error(`Run state write verification failed for ${run.runId}.`);
 }
 
 export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { startShadowBoardRunAsync } from "@/lib/agents/shadow-board";
 import { jsonCreated, jsonError, jsonOk } from "@/lib/http";
-import { listShadowBoardRuns } from "@/lib/store/repository";
+import { getShadowStateBackend, listShadowBoardRuns } from "@/lib/store/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +57,15 @@ const schema = z
 
 export async function POST(request: Request) {
   try {
+    const backend = getShadowStateBackend();
+    if (process.env.VERCEL === "1" && backend !== "blob") {
+      return jsonError(
+        "Durable run state is not configured for this deployment. Set BLOB_READ_WRITE_TOKEN in this Vercel environment and redeploy.",
+        503,
+        { backend },
+      );
+    }
+
     const payload = await request.json().catch(() => null);
     const parsed = schema.safeParse(payload);
 
