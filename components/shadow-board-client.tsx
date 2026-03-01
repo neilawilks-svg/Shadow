@@ -544,24 +544,53 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       }
 
       const payload = (await response.json()) as RunResult;
-      setRunResult(payload);
-      setStatus(payload.status);
       setRunWarnings(payload.warnings ?? []);
       if (payload.status === "running" || payload.status === "queued") {
         openShadowStream(payload.runId);
+      }
+
+      let latest: RunResult | null = payload;
+      let foundRunState = Boolean(payload.runId);
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        if (!payload.runId) {
+          foundRunState = false;
+          break;
+        }
         await tickRun(payload.runId);
         const started = await fetchRunById(payload.runId);
         if (started.run) {
-          setRunResult(started.run);
-          setStatus(started.run.status);
-          if (started.run.status === "failed") {
-            setError(
-              started.run.failureCode
-                ? `${started.run.failureCode}: ${started.run.failureDetail ?? "Run failed."}`
-                : "Run failed to start. Please retry.",
-            );
+          latest = started.run;
+          foundRunState = true;
+          if (started.run.status === "running" || started.run.status === "queued" || started.run.status === "completed") {
+            break;
           }
+          if (started.run.status === "failed") {
+            break;
+          }
+        } else if (started.status !== 404) {
+          foundRunState = false;
+          break;
+        } else {
+          foundRunState = false;
         }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      if (!foundRunState || !latest) {
+        setStatus("failed");
+        setError(`Run could not be loaded after start (runId: ${payload.runId ?? "unknown"}). Please retry.`);
+        closeShadowStream();
+        return;
+      }
+
+      setRunResult(latest);
+      setStatus(latest.status);
+      if (latest.status === "failed") {
+        setError(
+          latest.failureCode
+            ? `${latest.failureCode}: ${latest.failureDetail ?? "Run failed."}`
+            : latest.failureDetail ?? "Run failed to start. Please retry.",
+        );
       }
 
       void refreshRuns();
