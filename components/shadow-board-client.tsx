@@ -549,6 +549,19 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       setRunWarnings(payload.warnings ?? []);
       if (payload.status === "running" || payload.status === "queued") {
         openShadowStream(payload.runId);
+        await tickRun(payload.runId);
+        const started = await fetchRunById(payload.runId);
+        if (started.run) {
+          setRunResult(started.run);
+          setStatus(started.run.status);
+          if (started.run.status === "failed") {
+            setError(
+              started.run.failureCode
+                ? `${started.run.failureCode}: ${started.run.failureDetail ?? "Run failed."}`
+                : "Run failed to start. Please retry.",
+            );
+          }
+        }
       }
 
       void refreshRuns();
@@ -633,8 +646,12 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         }
         setRunResult(latest);
         setStatus(latest.status);
-        if (latest.status === "failed" && latest.failureCode) {
-          setError(`${latest.failureCode}: ${latest.failureDetail ?? "Run failed."}`);
+        if (latest.status === "failed") {
+          setError(
+            latest.failureCode
+              ? `${latest.failureCode}: ${latest.failureDetail ?? "Run failed."}`
+              : latest.failureDetail ?? "Run failed.",
+          );
         }
         if (Array.isArray(latest.warnings)) {
           setRunWarnings(latest.warnings);
@@ -922,7 +939,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
                 disabled={selectedPersonaCount === 0 || Boolean(agendaValidationError)}
                 className="btn-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50"
               >
-                {status === "running" ? "Running..." : "Run Shadow Board"}
+                {status === "running" || status === "queued" ? "Running..." : "Run Shadow Board"}
               </button>
               {error ? (
                 <p className="text-xs text-[color:var(--warn-ink)]">

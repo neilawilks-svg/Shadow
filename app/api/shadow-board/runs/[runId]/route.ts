@@ -52,6 +52,7 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
     lastCompletedTurn: run.lastCompletedTurn ?? 0,
     failureCode: run.failureCode,
     failureDetail: run.failureDetail,
+    error: run.error,
     outputFormat: run.outputFormat ?? "markdown",
     targetWordCount: run.targetWordCount ?? 600,
     outputs: [],
