@@ -103,61 +103,75 @@ async function readShadowStateJson<T>(fileName: string, fallback: T): Promise<T>
     return readJsonFile<T>(fileName, fallback);
   }
 
-  try {
-    const response = await fetchWithTimeout(
-      buildShadowBlobUrl(fileName),
-      {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
-      },
-      cache: "no-store",
-      },
-      SHADOW_BLOB_TIMEOUT_MS,
-    );
-    if (response.ok) {
-      return (await response.json()) as T;
-    }
-    if (response.status !== 404) {
-      return readJsonFile<T>(fileName, fallback);
-    }
-  } catch {
-    return readJsonFile<T>(fileName, fallback);
-  }
-
-  return readJsonFile<T>(fileName, fallback);
-}
-
-async function writeShadowStateJson<T>(fileName: string, value: T): Promise<void> {
-  let blobWriteSucceeded = false;
-
-  if (shouldUseShadowBlobState()) {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const response = await fetchWithTimeout(
-        buildShadowBlobUrl(fileName, true),
+        buildShadowBlobUrl(fileName),
         {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: `${JSON.stringify(value, null, 2)}\n`,
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
+          },
+          cache: "no-store",
         },
         SHADOW_BLOB_TIMEOUT_MS,
       );
-      blobWriteSucceeded = response.ok;
+
+      if (response.ok) {
+        return (await response.json()) as T;
+      }
+      if (response.status === 404) {
+        return fallback;
+      }
     } catch {
-      blobWriteSucceeded = false;
+      // Retry transient blob read failures before surfacing unavailability.
     }
+
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+    }
+  }
+
+  throw new Error(`Shadow state read unavailable for ${fileName}.`);
+}
+
+async function writeShadowStateJson<T>(fileName: string, value: T): Promise<void> {
+  if (shouldUseShadowBlobState()) {
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await fetchWithTimeout(
+          buildShadowBlobUrl(fileName, true),
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: `${JSON.stringify(value, null, 2)}\n`,
+          },
+          SHADOW_BLOB_TIMEOUT_MS,
+        );
+        if (response.ok) {
+          return;
+        }
+      } catch {
+        // Retry transient blob write failures before failing hard.
+      }
+
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+      }
+    }
+    throw new Error(`Unable to persist ${fileName} to blob store.`);
   }
 
   try {
     await writeJsonFile(fileName, value);
     return;
   } catch {
-    if (!blobWriteSucceeded) {
-      throw new Error(`Unable to persist ${fileName} to blob or file store.`);
-    }
+    throw new Error(`Unable to persist ${fileName} to file store.`);
   }
 }
 
@@ -405,6 +419,16 @@ export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
 }
 
 export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
+  await writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run);
+
+  // Keep the global index lightweight during active turns to reduce blob write pressure.
+  // The per-run file is the canonical source for active polling.
+  const shouldSyncIndex =
+    run.status === "completed" || run.status === "failed" || run.status === "queued" || (run.lastCompletedTurn ?? 0) === 0;
+  if (!shouldSyncIndex) {
+    return;
+  }
+
   const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
   let found = false;
   const next = runs.map((item) => {
@@ -417,10 +441,7 @@ export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
   if (!found) {
     next.unshift(run);
   }
-  await Promise.all([
-    writeShadowStateJson(SHADOW_BOARD_FILE, next),
-    writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run),
-  ]);
+  await writeShadowStateJson(SHADOW_BOARD_FILE, next);
 }
 
 export async function getShadowBoardRun(runId: string): Promise<ShadowBoardRun | undefined> {

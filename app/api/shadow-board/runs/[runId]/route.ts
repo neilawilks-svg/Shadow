@@ -85,11 +85,11 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
 
   if (run.status === "running" && run.lastHeartbeatAt) {
     const ageMs = Date.now() - new Date(run.lastHeartbeatAt).getTime();
-    if (Number.isFinite(ageMs) && ageMs > 120_000) {
+    if (Number.isFinite(ageMs) && ageMs > 900_000) {
       run.status = "failed";
       run.finishedAt = new Date().toISOString();
       run.failureCode = run.failureCode ?? "WORKER_STALLED";
-      run.failureDetail = run.failureDetail ?? "No run heartbeat was received for more than 120 seconds.";
+      run.failureDetail = run.failureDetail ?? "No run heartbeat was received for more than 15 minutes.";
       run.error = run.failureDetail;
       await updateShadowBoardRun(run);
     }

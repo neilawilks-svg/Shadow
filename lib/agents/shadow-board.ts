@@ -863,12 +863,7 @@ async function publishRunEvent(
 async function publishRunStage(run: ShadowBoardRun, stage: NonNullable<ShadowBoardRun["activeStage"]>): Promise<void> {
   run.activeStage = stage;
   run.lastHeartbeatAt = new Date().toISOString();
-  await updateShadowBoardRun(run);
-  await publishRunEvent(run, "run_stage", { message: `Stage: ${stage}` });
-  await publishRunEvent(run, "run_heartbeat", {
-    message: `Heartbeat at ${run.lastHeartbeatAt}`,
-    turnIndex: run.lastCompletedTurn,
-  });
+  // Avoid per-stage persistence/event fanout; per-turn commit remains canonical.
 }
 
 async function gatherPersonaRagEvidence(params: {
@@ -1869,13 +1864,6 @@ export async function tickShadowBoardRun(runId: string): Promise<ShadowBoardRun 
       speakerPersonaId: speaker.id,
       speakerName: speaker.name,
       transcriptLine,
-    });
-    await publishRunEvent(run, "run_heartbeat", {
-      message: "Turn committed.",
-      turnIndex: run.lastCompletedTurn,
-      topic,
-      speakerPersonaId: speaker.id,
-      speakerName: speaker.name,
     });
 
     if (run.status === "completed") {

@@ -615,7 +615,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
           if (!recentlyReceivedEvent) {
             missingRunPollCountRef.current += 1;
           }
-          if (missingRunPollCountRef.current >= 24) {
+          if (missingRunPollCountRef.current >= 120) {
             setStatus("failed");
             setError("Run state unavailable after repeated retries. Please restart the run.");
             closeShadowStream();
