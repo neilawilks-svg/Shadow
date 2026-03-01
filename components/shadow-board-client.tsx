@@ -551,7 +551,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
 
       let latest: RunResult | null = payload;
       let foundRunState = Boolean(payload.runId);
-      for (let attempt = 0; attempt < 6; attempt += 1) {
+      for (let attempt = 0; attempt < 24; attempt += 1) {
         if (!payload.runId) {
           foundRunState = false;
           break;
@@ -573,7 +573,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         } else {
           foundRunState = false;
         }
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 750));
       }
 
       if (!foundRunState || !latest) {

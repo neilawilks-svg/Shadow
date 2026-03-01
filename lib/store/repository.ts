@@ -432,8 +432,8 @@ export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
     // list/recent-runs index is non-critical for active run lifecycle
   }
 
-  // Hard guarantee: do not report a started run unless it can be read back.
-  for (let attempt = 1; attempt <= 15; attempt += 1) {
+  // Best-effort read-after-write check; do not block startup on blob propagation lag.
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
     try {
       const persisted = await readShadowStateJson<ShadowBoardRun | null>(runFileName, null);
       if (persisted?.runId === run.runId) {
@@ -443,12 +443,11 @@ export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
       // Retry read-after-write checks on transient storage issues.
     }
 
-    if (attempt < 15) {
-      await new Promise((resolve) => setTimeout(resolve, Math.min(300 * attempt, 2_000)));
+    if (attempt < 20) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(400 * attempt, 2_500)));
     }
   }
-
-  throw new Error(`Run state write verification failed for ${run.runId}.`);
+  // Continue without throwing; recovery can rehydrate from events once the store catches up.
 }
 
 export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
@@ -479,13 +478,13 @@ export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
 
 export async function getShadowBoardRun(runId: string): Promise<ShadowBoardRun | undefined> {
   const singleFileName = `${SHADOW_RUN_FILE_PREFIX}-${runId}.json`;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
     const runFromSingleFile = await readShadowStateJson<ShadowBoardRun | null>(singleFileName, null);
     if (runFromSingleFile && runFromSingleFile.runId === runId) {
       return runFromSingleFile;
     }
-    if (attempt < 3) {
-      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    if (attempt < 20) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(300 * attempt, 2_500)));
     }
   }
 
