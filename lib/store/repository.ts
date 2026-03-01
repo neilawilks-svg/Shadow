@@ -37,6 +37,20 @@ const BLOB_BASE_URL = "https://blob.vercel-storage.com";
 const SHADOW_STATE_PREFIX = "state/shadow-board";
 const SHADOW_RUN_FILE_PREFIX = "shadow-board-run";
 const SHADOW_RUN_EVENTS_FILE_PREFIX = "shadow-board-run-events";
+const SHADOW_BLOB_TIMEOUT_MS = 8_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 type BoardMemberAgentProfile = {
   personaId: string;
@@ -90,13 +104,17 @@ async function readShadowStateJson<T>(fileName: string, fallback: T): Promise<T>
   }
 
   try {
-    const response = await fetch(buildShadowBlobUrl(fileName), {
+    const response = await fetchWithTimeout(
+      buildShadowBlobUrl(fileName),
+      {
       method: "GET",
       headers: {
         Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
       },
       cache: "no-store",
-    });
+      },
+      SHADOW_BLOB_TIMEOUT_MS,
+    );
     if (response.ok) {
       return (await response.json()) as T;
     }
@@ -115,14 +133,18 @@ async function writeShadowStateJson<T>(fileName: string, value: T): Promise<void
 
   if (shouldUseShadowBlobState()) {
     try {
-      const response = await fetch(buildShadowBlobUrl(fileName, true), {
+      const response = await fetchWithTimeout(
+        buildShadowBlobUrl(fileName, true),
+        {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${BLOB_WRITE_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: `${JSON.stringify(value, null, 2)}\n`,
-      });
+        },
+        SHADOW_BLOB_TIMEOUT_MS,
+      );
       blobWriteSucceeded = response.ok;
     } catch {
       blobWriteSucceeded = false;

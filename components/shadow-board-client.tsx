@@ -385,15 +385,23 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 20_000);
     try {
-      await fetch(`/api/shadow-board/runs/${runId}/tick`, {
+      const response = await fetch(`/api/shadow-board/runs/${runId}/tick`, {
         method: "POST",
         signal: controller.signal,
       });
+      if (!response.ok) {
+        const message = await readErrorMessage(response, "Tick failed");
+        setError(message);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setError("Tick request timed out. Retrying...");
+      }
     } finally {
       window.clearTimeout(timer);
       tickInFlightRef.current = false;
     }
-  }, []);
+  }, [readErrorMessage]);
 
   const downloadTranscriptPdf = useCallback(async () => {
     setError(null);

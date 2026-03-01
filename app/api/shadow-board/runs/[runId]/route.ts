@@ -1,5 +1,5 @@
 import { jsonError, jsonOk } from "@/lib/http";
-import { getShadowBoardRun, getShadowBoardRunEvents } from "@/lib/store/repository";
+import { getShadowBoardRun, getShadowBoardRunEvents, updateShadowBoardRun } from "@/lib/store/repository";
 import type { ShadowBoardRun, ShadowBoardRunEvent } from "@/types/domain";
 
 export const runtime = "nodejs";
@@ -81,6 +81,18 @@ export async function GET(_: Request, context: { params: Promise<{ runId: string
 
   if (!run) {
     return jsonError("Shadow board run not found.", 404);
+  }
+
+  if (run.status === "running" && run.lastHeartbeatAt) {
+    const ageMs = Date.now() - new Date(run.lastHeartbeatAt).getTime();
+    if (Number.isFinite(ageMs) && ageMs > 120_000) {
+      run.status = "failed";
+      run.finishedAt = new Date().toISOString();
+      run.failureCode = run.failureCode ?? "WORKER_STALLED";
+      run.failureDetail = run.failureDetail ?? "No run heartbeat was received for more than 120 seconds.";
+      run.error = run.failureDetail;
+      await updateShadowBoardRun(run);
+    }
   }
 
   return jsonOk({
