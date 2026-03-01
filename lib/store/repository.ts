@@ -99,7 +99,7 @@ function buildShadowBlobUrl(fileName: string, write = false): string {
   if (!write) {
     return base;
   }
-  return `${base}?access=private&addRandomSuffix=0`;
+  return `${base}?access=public&addRandomSuffix=0`;
 }
 
 function buildShadowBlobReadUrl(fileName: string): string {
@@ -433,7 +433,7 @@ export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
   }
 
   // Hard guarantee: do not report a started run unless it can be read back.
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  for (let attempt = 1; attempt <= 15; attempt += 1) {
     try {
       const persisted = await readShadowStateJson<ShadowBoardRun | null>(runFileName, null);
       if (persisted?.runId === run.runId) {
@@ -443,8 +443,8 @@ export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
       // Retry read-after-write checks on transient storage issues.
     }
 
-    if (attempt < 5) {
-      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    if (attempt < 15) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(300 * attempt, 2_000)));
     }
   }
 
