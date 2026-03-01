@@ -382,9 +382,15 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       return;
     }
     tickInFlightRef.current = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 20_000);
     try {
-      await fetch(`/api/shadow-board/runs/${runId}/tick`, { method: "POST" });
+      await fetch(`/api/shadow-board/runs/${runId}/tick`, {
+        method: "POST",
+        signal: controller.signal,
+      });
     } finally {
+      window.clearTimeout(timer);
       tickInFlightRef.current = false;
     }
   }, []);

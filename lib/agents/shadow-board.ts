@@ -842,14 +842,22 @@ async function publishRunEvent(
   payload: ShadowBoardRunEvent["payload"] = {},
   options: { includeRun?: boolean } = {},
 ): Promise<void> {
-  await publishShadowBoardEvent({
-    eventId: `shadow-event-${randomUUID()}`,
-    runId: run.runId,
-    shadowSessionId: run.shadowSessionId,
-    type,
-    createdAt: new Date().toISOString(),
-    payload: options.includeRun ? { ...payload, run } : { ...payload },
-  });
+  try {
+    await withTimeout(
+      publishShadowBoardEvent({
+        eventId: `shadow-event-${randomUUID()}`,
+        runId: run.runId,
+        shadowSessionId: run.shadowSessionId,
+        type,
+        createdAt: new Date().toISOString(),
+        payload: options.includeRun ? { ...payload, run } : { ...payload },
+      }),
+      5_000,
+      "publish_shadow_event",
+    );
+  } catch {
+    // Event publishing is best-effort. Run state persistence is authoritative.
+  }
 }
 
 async function publishRunStage(run: ShadowBoardRun, stage: NonNullable<ShadowBoardRun["activeStage"]>): Promise<void> {
