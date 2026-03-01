@@ -398,7 +398,7 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setError("Tick request timed out. Retrying...");
+        // Transient timeout while server is processing a turn; polling continues.
       }
     } finally {
       window.clearTimeout(timer);
@@ -544,6 +544,8 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       }
 
       const payload = (await response.json()) as RunResult;
+      setRunResult(payload);
+      setStatus(payload.status);
       setRunWarnings(payload.warnings ?? []);
       if (payload.status === "running" || payload.status === "queued") {
         openShadowStream(payload.runId);
@@ -577,9 +579,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
       }
 
       if (!foundRunState || !latest) {
-        setStatus("failed");
-        setError(`Run could not be loaded after start (runId: ${payload.runId ?? "unknown"}). Please retry.`);
-        closeShadowStream();
+        setRunResult(payload);
+        setStatus("queued");
+        setError(`Run startup is delayed (runId: ${payload.runId ?? "unknown"}). Retrying automatically...`);
         return;
       }
 
