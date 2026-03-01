@@ -102,6 +102,11 @@ function buildShadowBlobUrl(fileName: string, write = false): string {
   return `${base}?access=private&addRandomSuffix=0`;
 }
 
+function buildShadowBlobReadUrl(fileName: string): string {
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${buildShadowBlobUrl(fileName)}?t=${nonce}`;
+}
+
 async function readShadowStateJson<T>(fileName: string, fallback: T): Promise<T> {
   if (!shouldUseShadowBlobState()) {
     return readJsonFile<T>(fileName, fallback);
@@ -111,7 +116,7 @@ async function readShadowStateJson<T>(fileName: string, fallback: T): Promise<T>
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const response = await fetchWithTimeout(
-        buildShadowBlobUrl(fileName),
+        buildShadowBlobReadUrl(fileName),
         {
           method: "GET",
           headers: {
