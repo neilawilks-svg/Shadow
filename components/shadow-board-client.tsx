@@ -390,6 +390,9 @@ export function ShadowBoardClientPage({ initialPersonas }: ShadowBoardClientPage
         signal: controller.signal,
       });
       if (!response.ok) {
+        if (response.status === 404 || response.status === 409 || response.status === 429) {
+          return;
+        }
         const message = await readErrorMessage(response, "Tick failed");
         setError(message);
       }

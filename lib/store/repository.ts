@@ -445,12 +445,15 @@ export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {
 }
 
 export async function getShadowBoardRun(runId: string): Promise<ShadowBoardRun | undefined> {
-  const runFromSingleFile = await readShadowStateJson<ShadowBoardRun | null>(
-    `${SHADOW_RUN_FILE_PREFIX}-${runId}.json`,
-    null,
-  );
-  if (runFromSingleFile && runFromSingleFile.runId === runId) {
-    return runFromSingleFile;
+  const singleFileName = `${SHADOW_RUN_FILE_PREFIX}-${runId}.json`;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const runFromSingleFile = await readShadowStateJson<ShadowBoardRun | null>(singleFileName, null);
+    if (runFromSingleFile && runFromSingleFile.runId === runId) {
+      return runFromSingleFile;
+    }
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
   }
 
   const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
