@@ -466,16 +466,18 @@ export async function listShadowBoardRuns(limit = 100): Promise<ShadowBoardRun[]
 }
 
 export async function appendShadowBoardRunEvent(event: ShadowBoardRunEvent): Promise<void> {
-  const [events, perRunEvents] = await Promise.all([
-    readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []),
-    readShadowStateJson<ShadowBoardRunEvent[]>(`${SHADOW_RUN_EVENTS_FILE_PREFIX}-${event.runId}.json`, []),
-  ]);
-  events.push(event);
+  const perRunEvents = await readShadowStateJson<ShadowBoardRunEvent[]>(`${SHADOW_RUN_EVENTS_FILE_PREFIX}-${event.runId}.json`, []);
   perRunEvents.push(event);
-  await Promise.all([
-    writeShadowStateJson(SHADOW_BOARD_EVENTS_FILE, events.slice(-5000)),
-    writeShadowStateJson(`${SHADOW_RUN_EVENTS_FILE_PREFIX}-${event.runId}.json`, perRunEvents.slice(-5000)),
-  ]);
+  await writeShadowStateJson(`${SHADOW_RUN_EVENTS_FILE_PREFIX}-${event.runId}.json`, perRunEvents.slice(-5000));
+
+  // Keep global event log best-effort to reduce write pressure in active runs.
+  try {
+    const events = await readShadowStateJson<ShadowBoardRunEvent[]>(SHADOW_BOARD_EVENTS_FILE, []);
+    events.push(event);
+    await writeShadowStateJson(SHADOW_BOARD_EVENTS_FILE, events.slice(-5000));
+  } catch {
+    // per-run event stream is canonical for run recovery
+  }
 }
 
 export async function getShadowBoardRunEvents(runId: string, limit = 500): Promise<ShadowBoardRunEvent[]> {
