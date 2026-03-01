@@ -410,12 +410,17 @@ export async function updateInterviewSession(updated: PersonaInterviewSession): 
 }
 
 export async function createShadowBoardRun(run: ShadowBoardRun): Promise<void> {
-  const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
-  runs.unshift(run);
-  await Promise.all([
-    writeShadowStateJson(SHADOW_BOARD_FILE, runs),
-    writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run),
-  ]);
+  // Persist canonical per-run state first so polling/ticks can always find the run.
+  await writeShadowStateJson(`${SHADOW_RUN_FILE_PREFIX}-${run.runId}.json`, run);
+
+  // Keep global index best-effort to avoid blocking run creation on index write pressure.
+  try {
+    const runs = await readShadowStateJson<ShadowBoardRun[]>(SHADOW_BOARD_FILE, []);
+    runs.unshift(run);
+    await writeShadowStateJson(SHADOW_BOARD_FILE, runs);
+  } catch {
+    // list/recent-runs index is non-critical for active run lifecycle
+  }
 }
 
 export async function updateShadowBoardRun(run: ShadowBoardRun): Promise<void> {

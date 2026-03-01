@@ -56,53 +56,58 @@ const schema = z
   });
 
 export async function POST(request: Request) {
-  const payload = await request.json().catch(() => null);
-  const parsed = schema.safeParse(payload);
+  try {
+    const payload = await request.json().catch(() => null);
+    const parsed = schema.safeParse(payload);
 
-  if (!parsed.success) {
-    return jsonError("Invalid shadow board run payload.", 400, parsed.error.flatten());
+    if (!parsed.success) {
+      return jsonError("Invalid shadow board run payload.", 400, parsed.error.flatten());
+    }
+
+    const agendaItems = parsed.data.agendaItems?.length
+      ? parsed.data.agendaItems.map((item, index) => ({
+          id: item.id ?? `agenda-item-${index + 1}`,
+          title: item.title,
+          timePercent: item.timePercent,
+          detailedDescription: item.detailedDescription,
+          desiredOutput: item.desiredOutput,
+          questions: item.questions,
+        }))
+      : undefined;
+
+    const legacyAgenda = parsed.data.agenda?.trim() ?? "";
+    const legacyTopics = parsed.data.topics ?? [];
+
+    const synthesizedAgendaItems =
+      agendaItems && agendaItems.length > 0
+        ? agendaItems
+        : [
+            {
+              id: "agenda-item-1",
+              title: legacyTopics[0] ?? legacyAgenda,
+              timePercent: 100,
+              detailedDescription: legacyAgenda,
+              desiredOutput: legacyAgenda,
+              questions: legacyTopics.slice(1),
+            },
+          ];
+
+    const synthesizedAgenda =
+      legacyAgenda || synthesizedAgendaItems.map((item) => item.title).join(" | ") || "Shadow board agenda";
+    const synthesizedTopics =
+      legacyTopics.length > 0 ? legacyTopics : synthesizedAgendaItems.map((item) => item.title).filter(Boolean);
+
+    const run = await startShadowBoardRunAsync({
+      ...parsed.data,
+      agenda: synthesizedAgenda,
+      topics: synthesizedTopics,
+      agendaItems: synthesizedAgendaItems,
+    });
+    return jsonCreated(run);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to start shadow board run.";
+    return jsonError(message, 500);
   }
-
-  const agendaItems = parsed.data.agendaItems?.length
-    ? parsed.data.agendaItems.map((item, index) => ({
-        id: item.id ?? `agenda-item-${index + 1}`,
-        title: item.title,
-        timePercent: item.timePercent,
-        detailedDescription: item.detailedDescription,
-        desiredOutput: item.desiredOutput,
-        questions: item.questions,
-      }))
-    : undefined;
-
-  const legacyAgenda = parsed.data.agenda?.trim() ?? "";
-  const legacyTopics = parsed.data.topics ?? [];
-
-  const synthesizedAgendaItems =
-    agendaItems && agendaItems.length > 0
-      ? agendaItems
-      : [
-          {
-            id: "agenda-item-1",
-            title: legacyTopics[0] ?? legacyAgenda,
-            timePercent: 100,
-            detailedDescription: legacyAgenda,
-            desiredOutput: legacyAgenda,
-            questions: legacyTopics.slice(1),
-          },
-        ];
-
-  const synthesizedAgenda =
-    legacyAgenda || synthesizedAgendaItems.map((item) => item.title).join(" | ") || "Shadow board agenda";
-  const synthesizedTopics =
-    legacyTopics.length > 0 ? legacyTopics : synthesizedAgendaItems.map((item) => item.title).filter(Boolean);
-
-  const run = await startShadowBoardRunAsync({
-    ...parsed.data,
-    agenda: synthesizedAgenda,
-    topics: synthesizedTopics,
-    agendaItems: synthesizedAgendaItems,
-  });
-  return jsonCreated(run);
 }
 
 export async function GET(request: Request) {
